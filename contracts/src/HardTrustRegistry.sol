@@ -26,12 +26,8 @@ contract HardTrustRegistry {
     /// @param deviceAddr Ethereum address derived from the device's public key
     function registerDevice(bytes32 serialHash, address deviceAddr) external {
         require(msg.sender == ATTESTER, "not attester");
-        devices[serialHash] = Device({
-            deviceAddr: deviceAddr,
-            attester: msg.sender,
-            attestedAt: block.timestamp,
-            active: true
-        });
+        devices[serialHash] =
+            Device({deviceAddr: deviceAddr, attester: msg.sender, attestedAt: block.timestamp, active: true});
     }
 
     /// @notice Query a device record by serial hash. Returns zero values if not found.
