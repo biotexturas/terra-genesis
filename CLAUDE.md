@@ -26,6 +26,7 @@ When a spec references other specs or stories (e.g., "depends on S1.1"), read th
 - Branch naming: `feat/[story-id]-short-description` (e.g., `feat/s1.1-device-init`), or `fix/[story-id]-description`, `chore/description`
 - Commit granularly — one commit per logical change, not one giant commit per story
 - Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`
+- When pushing a branch, always create the PR in the same step — do not wait for a separate request
 - Run `just ci` before creating a PR
 - Use `--emulate` flag or `HARDTRUST_EMULATE=1` for development/CI without RPi hardware
 
