@@ -1,3 +1,3 @@
 [workspace]
-members = []
+members = ["device"]
 resolver = "2"
