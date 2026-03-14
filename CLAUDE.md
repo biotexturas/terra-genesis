@@ -1,16 +1,94 @@
 # CLAUDE.md
 
+## Context Loading
+
+Before implementing any story, read these documents in order:
+
+1. **Story:** `docs/stories/slice-N/[story-id]-[name].md` — acceptance criteria, edge cases, dependencies
+2. **Spec:** `docs/specs/[spec-id].spec.md` — what to build, what NOT to build, validation criteria
+3. **Architecture:** `docs/architecture.md` — system boundaries, component responsibilities, data flow
+4. **ADRs:** scan `docs/adr/` for any ADR relevant to the component you are modifying
+5. **REVIEW.md** — review criteria that your PR will be checked against
+
+For non-functional (S0.x) specs that have no story, skip step 1.
+
+When a spec references other specs or stories (e.g., "depends on S1.1"), read those too.
+
 ## Operational Rules
 
-- Read the spec at `docs/specs/[spec-id].spec.md` before writing any code
-- Run `just ci` before creating a PR
+### Planning
+- Read context documents (see Context Loading above) before writing any code
+- Break the story into sub-tasks if it touches multiple crates
+- Identify which crate(s) and files will be created or modified
+
+### Implementation
 - One story per branch, one PR per story
-- Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`
-- Create an ADR in `docs/adr/` when choosing between viable alternatives or deviating from architecture
-- Never merge autonomously — always require human approval
-- When CI fails, diagnose and fix before requesting review
+- Branch naming: `feat/[story-id]-short-description` (e.g., `feat/s1.1-device-init`), or `fix/[story-id]-description`, `chore/description`
+- Commit granularly — one commit per logical change, not one giant commit per story
+- Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`
+- Run `just ci` before creating a PR
 - Use `--emulate` flag or `HARDTRUST_EMULATE=1` for development/CI without RPi hardware
+
+### Quality
+- Tests are part of the story — write tests alongside implementation, not after
+- Every acceptance criterion in the story should have at least one test
+- No `.unwrap()` in library code (`common/`) — use `Result` with descriptive errors
+- All public functions must have doc comments
+
+### Architecture Decisions
+- Create an ADR in `docs/adr/` when choosing between viable alternatives or deviating from architecture
+- ADRs are committed alongside the code change that implements the decision
+
+### Boundaries
+- Never merge autonomously — always require human approval
 - No direct pushes to main — use PRs
+- Do not implement anything listed in the spec's "What NOT to Build" section
+
+## When Things Fail
+
+### CI failure
+1. Read the full CI output
+2. Identify the failing gate (lint, test, integration, etc.)
+3. Fix the issue locally
+4. Run `just ci` to verify the fix
+5. Commit the fix with `fix: [description of what broke]`
+6. If stuck after 3 attempts, report the failure with diagnosis to the human
+
+### Test failure
+1. Read the test output and identify the failing assertion
+2. Determine if the bug is in the code or the test
+3. If in the code: fix and verify
+4. If in the test: check the spec/story — does the test match the acceptance criteria?
+5. Run the full test suite to check for regressions
+
+### Review feedback
+1. Read all review comments
+2. Fix each issue in a separate commit (or group related fixes)
+3. Do not force-push — add fixup commits so the reviewer can see what changed
+4. Run `just ci` after all fixes
+
+## Documentation Cross-References
+
+- Specs reference their source story via a "Story Reference" link at the top
+- Specs and stories should reference relevant ADRs (e.g., "See ADR-0002 for why secp256k1")
+- Before implementing, read any ADR referenced by the spec or story — it contains the rationale behind technical decisions
+- When implementing, always verify your code satisfies BOTH the spec's validation criteria AND the story's acceptance criteria
+- If a spec and story contradict each other, the spec takes precedence (specs are more recent and more detailed)
+- If an implementation decision contradicts an existing ADR, do not proceed — report it to the human
+- Report any contradictions to the human rather than guessing
+
+## Available Skills
+
+Install skills as needed — do not preload skills for code that does not exist yet.
+
+| Skill | Install When | Purpose |
+|-------|-------------|---------|
+| `trailofbits/building-secure-contracts` | First Solidity PR (S1.2+) | Smart contract vulnerability scanning |
+| `trailofbits/static-analysis` | When codebase is large enough for SARIF analysis | Multi-tool static analysis |
+
+## MCP Servers
+
+No MCP servers configured. All Slice 1 development uses local tools only (Foundry, Cargo, just).
 
 ## Branch Protection (configured via GitHub UI)
 
