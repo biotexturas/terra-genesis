@@ -35,7 +35,15 @@ V1 and V2 can run in parallel. V3 depends on V1. V4 depends on all.
 
 #### S1a.2 — Verify registered device
 
-**Story:** [S1a.2](../stories/slice-1/s1a.2-verify-registered-device.md) | Specs: TBD
+**Story:** [S1a.2](../stories/slice-1/s1a.2-verify-registered-device.md)
+
+| Spec | Name | Status | Handoff |
+|------|------|--------|---------|
+| V1 | [Types & Device Emit](s1a.2-v1-types-and-device-emit.spec.md) | Draft | Embedded |
+| V2 | [Attester Verify](s1a.2-v2-attester-verify.spec.md) | Draft | Embedded |
+| V3 | [E2E Verify](s1a.2-v3-e2e-verify.spec.md) | Draft | Embedded |
+
+V1 first (types + device emit). V2 depends on V1. V3 depends on V1 + V2.
 
 #### S1a.3 — Verify unregistered device
 
