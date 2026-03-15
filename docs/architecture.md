@@ -109,7 +109,7 @@ hardtrust/
 
 **Referenced stories:** S1a.1 (register via CLI), S1a.2 (verify registered device), S1a.3 (verify unregistered device)
 
-### 3.3 common/ (Rust library)
+### 3.3 common/ → bindings/ (Rust library)
 
 **Responsibility:** Shared code consumed by both `device/` and `attester/`. Single source of truth for cryptography, types, and contract interaction.
 
@@ -121,6 +121,12 @@ hardtrust/
 - Ethereum address derivation from public key
 
 **Design constraint:** This crate has no CLI, no I/O, no side effects. Pure library.
+
+**Bindings strategy (decided 2026-03-15):**
+- S1a (The Wire): No shared crate. `sol!` macro used inline in `attester/` directly — acceptable with 1 consumer crate.
+- S1b+ (when 2nd crate needs contract access): Migrate to a dedicated `bindings/` crate that uses `sol!` internally. Consumer crates depend on `bindings/`, not on Alloy directly. This gives compile-time safety, zero drift, single source of truth, and minimal deps in consumers.
+- Pre-generated committed bindings (like `forge bind --alloy` output) are explicitly rejected — drift risk and 28K+ tokens of generated code in repo.
+- Migration is mechanical (~15 min): move `sol!` call to `bindings/src/lib.rs`, update consumer deps.
 
 ### 3.4 contracts/ (Solidity / Foundry)
 
