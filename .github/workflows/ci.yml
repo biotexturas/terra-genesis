@@ -57,6 +57,17 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: E2E tests (stub)
-        run: echo "E2E tests — will be enabled when full flow exists"
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - uses: extractions/setup-just@v2
+
+      - name: E2E — The Wire
+        run: just e2e-the-wire
