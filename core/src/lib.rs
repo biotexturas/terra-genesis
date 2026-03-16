@@ -17,41 +17,39 @@ pub fn public_key_to_address(pk: &VerifyingKey) -> Address {
     Address::from_slice(&hash[12..])
 }
 
+/// Build the canonical keccak256 hash of a Reading's signing payload.
+///
+/// The 68-byte preimage is: `serial_hash(32) || address_bytes(20) || temperature_scaled(8) || timestamp_u64(8)`.
+/// Returns `None` if the reading has invalid address hex or timestamp format.
+pub fn reading_prehash(reading: &Reading) -> Option<[u8; 32]> {
+    let serial_hash: [u8; 32] = Keccak256::digest(reading.serial.as_bytes()).into();
+
+    let addr_str = reading.address.trim_start_matches("0x");
+    let address_bytes: [u8; 20] = hex::decode(addr_str).ok()?.try_into().ok()?;
+
+    let temp_scaled = (reading.temperature * 1000.0) as i64;
+
+    let ts = chrono::DateTime::parse_from_rfc3339(&reading.timestamp)
+        .ok()?
+        .timestamp() as u64;
+
+    let mut preimage = Vec::with_capacity(68);
+    preimage.extend_from_slice(&serial_hash);
+    preimage.extend_from_slice(&address_bytes);
+    preimage.extend_from_slice(&temp_scaled.to_be_bytes());
+    preimage.extend_from_slice(&ts.to_be_bytes());
+    debug_assert_eq!(preimage.len(), 68);
+
+    Some(Keccak256::digest(&preimage).into())
+}
+
 /// Signs a `Reading` and returns a 65-byte EVM-format hex signature.
 ///
 /// The payload is `keccak256(serial_hash || address_bytes || temperature_scaled || timestamp_u64)`
 /// where the 68-byte preimage is constructed as specified in S1b.2-V1.
 /// Returns `"0x" + hex(r || s || v)` where v ∈ {0, 1}.
 pub fn sign_reading(key: &SigningKey, reading: &Reading) -> String {
-    // 1. serial_hash: keccak256(serial bytes) → 32 bytes
-    let serial_hash: [u8; 32] = Keccak256::digest(reading.serial.as_bytes()).into();
-
-    // 2. address_bytes: parse 20-byte EVM address → 20 bytes
-    let addr_str = reading.address.trim_start_matches("0x");
-    let address_bytes: [u8; 20] = hex::decode(addr_str)
-        .expect("invalid address hex")
-        .try_into()
-        .expect("address must be 20 bytes");
-
-    // 3. temperature_scaled: (temperature * 1000) as i64 → 8 bytes big-endian
-    let temp_scaled = (reading.temperature * 1000.0) as i64;
-    let temperature_bytes = temp_scaled.to_be_bytes();
-
-    // 4. timestamp_u64: ISO 8601 UTC → Unix timestamp as u64 → 8 bytes big-endian
-    let ts = chrono::DateTime::parse_from_rfc3339(&reading.timestamp)
-        .expect("invalid timestamp")
-        .timestamp() as u64;
-    let timestamp_bytes = ts.to_be_bytes();
-
-    // Build 68-byte preimage and hash it
-    let mut preimage = Vec::with_capacity(68);
-    preimage.extend_from_slice(&serial_hash);
-    preimage.extend_from_slice(&address_bytes);
-    preimage.extend_from_slice(&temperature_bytes);
-    preimage.extend_from_slice(&timestamp_bytes);
-    debug_assert_eq!(preimage.len(), 68);
-
-    let hash = Keccak256::digest(&preimage);
+    let hash = reading_prehash(reading).expect("invalid reading");
 
     // Sign
     let (sig, recovery_id) = key
@@ -84,30 +82,11 @@ pub fn verify_reading(reading: &Reading, on_chain_address: Address) -> bool {
         return false;
     }
 
-    // Reconstruct canonical hash — must match sign_reading exactly
-    let serial_hash: [u8; 32] = Keccak256::digest(reading.serial.as_bytes()).into();
-
-    let addr_str = reading.address.trim_start_matches("0x");
-    let address_bytes: [u8; 20] = match hex::decode(addr_str).ok().and_then(|b| b.try_into().ok()) {
-        Some(b) => b,
+    let hash = match reading_prehash(reading) {
+        Some(h) => h,
         None => return false,
     };
-
-    let temp_scaled = (reading.temperature * 1000.0) as i64;
-
-    let ts = match chrono::DateTime::parse_from_rfc3339(&reading.timestamp) {
-        Ok(dt) => dt.timestamp() as u64,
-        Err(_) => return false,
-    };
-
-    let mut preimage = Vec::with_capacity(68);
-    preimage.extend_from_slice(&serial_hash);
-    preimage.extend_from_slice(&address_bytes);
-    preimage.extend_from_slice(&temp_scaled.to_be_bytes());
-    preimage.extend_from_slice(&ts.to_be_bytes());
-
-    let hash = Keccak256::digest(&preimage);
-    let prehash = B256::from(<[u8; 32]>::from(hash));
+    let prehash = B256::from(hash);
 
     // Parse signature
     let sig_hex = reading.signature.trim_start_matches("0x");
@@ -295,6 +274,45 @@ mod tests {
         let json = serde_json::to_string(&reading).expect("serialize");
         let deserialized: Reading = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(reading, deserialized);
+    }
+
+    #[test]
+    fn reading_prehash_returns_expected_hash() {
+        let reading = test_reading();
+        let hash = reading_prehash(&reading).expect("valid reading");
+        // Precomputed keccak256 of the canonical 68-byte preimage for test_reading()
+        let expected = {
+            use sha3::{Digest, Keccak256};
+            let serial_hash: [u8; 32] = Keccak256::digest(reading.serial.as_bytes()).into();
+            let addr_str = reading.address.trim_start_matches("0x");
+            let address_bytes: [u8; 20] = hex::decode(addr_str).unwrap().try_into().unwrap();
+            let temp_scaled = (reading.temperature * 1000.0) as i64;
+            let ts = chrono::DateTime::parse_from_rfc3339(&reading.timestamp)
+                .unwrap()
+                .timestamp() as u64;
+            let mut preimage = Vec::with_capacity(68);
+            preimage.extend_from_slice(&serial_hash);
+            preimage.extend_from_slice(&address_bytes);
+            preimage.extend_from_slice(&temp_scaled.to_be_bytes());
+            preimage.extend_from_slice(&ts.to_be_bytes());
+            let h: [u8; 32] = Keccak256::digest(&preimage).into();
+            h
+        };
+        assert_eq!(hash, expected);
+    }
+
+    #[test]
+    fn reading_prehash_returns_none_for_invalid_address() {
+        let mut reading = test_reading();
+        reading.address = "0xZZZZ".to_string();
+        assert!(reading_prehash(&reading).is_none());
+    }
+
+    #[test]
+    fn reading_prehash_returns_none_for_invalid_timestamp() {
+        let mut reading = test_reading();
+        reading.timestamp = "not-a-timestamp".to_string();
+        assert!(reading_prehash(&reading).is_none());
     }
 
     #[test]
