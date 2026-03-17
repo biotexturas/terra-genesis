@@ -18,7 +18,7 @@ HardTrust is a DePIN device identity and attestation system. Physical devices (R
       | (Rust)       | | (Foundry)   | | (Slice 2+)    |
       +-------+------+ +------+------+ +-------+-------+
               |                                 |
-              +--------+  common/  +------------+
+              +--------+ protocol/ +------------+
               |        | (Rust lib)|
               |        +-----+----+
               |              |
@@ -36,27 +36,27 @@ HardTrust is a DePIN device identity and attestation system. Physical devices (R
 - device → local JSON file (Slice 1) or API (Slice 2+)
 - attester CLI → smart contract (on-chain tx via Alloy)
 - webapp → smart contract (read registration status) + off-chain data store (read device readings)
-- All Rust crates share crypto and types via the common library
+- All Rust crates share crypto and types via the protocol library
 
 ## 2. Repository Structure
 
 ```
 hardtrust/
-├── Cargo.toml              # Workspace root (members: device, attester, common)
+├── Cargo.toml              # Workspace root (members: device, attester, protocol)
 ├── justfile                 # Task runner commands
 ├── contracts/              # Solidity (Foundry project, NOT a Cargo member)
 │   ├── foundry.toml
 │   ├── src/
 │   ├── test/
 │   ├── script/             # Deploy scripts
-│   └── out/                # Build artifacts (ABI JSON consumed by common/)
+│   └── out/                # Build artifacts (ABI JSON consumed by protocol/)
 ├── device/                 # Rust binary — RPi package
 │   ├── Cargo.toml
 │   └── src/
 ├── attester/               # Rust binary — CLI registration tool
 │   ├── Cargo.toml
 │   └── src/
-├── common/                 # Rust library — shared crypto, types, ABI bindings
+├── protocol/               # Rust library — shared crypto, types, ABI bindings
 │   ├── Cargo.toml
 │   └── src/
 ├── webapp/                 # React app (Slice 2+)
@@ -67,9 +67,9 @@ hardtrust/
 ```
 
 **Key boundaries:**
-- `Cargo.toml` at root defines a workspace with members: `device`, `attester`, `common`
+- `Cargo.toml` at root defines a workspace with members: `device`, `attester`, `protocol`
 - `contracts/` is a standalone Foundry project — it is NOT part of the Cargo workspace
-- The ABI bridge flows one direction: Foundry builds to `contracts/out/`, the `common` crate reads those artifacts at compile time via the Alloy `sol!` macro
+- The ABI bridge flows one direction: Foundry builds to `contracts/out/`, the `protocol` crate reads those artifacts at compile time via the Alloy `sol!` macro
 
 ## 3. Component Architecture
 
@@ -109,7 +109,7 @@ hardtrust/
 
 **Referenced stories:** S1a.1 (register via CLI), S1a.2 (verify registered device), S1a.3 (verify unregistered device)
 
-### 3.3 common/ → bindings/ (Rust library)
+### 3.3 protocol/ → bindings/ (Rust library)
 
 **Responsibility:** Shared code consumed by both `device/` and `attester/`. Single source of truth for cryptography, types, and contract interaction.
 
@@ -124,9 +124,8 @@ hardtrust/
 
 **Bindings strategy (decided 2026-03-15):**
 - S1a (The Wire): No shared crate. `sol!` macro used inline in `attester/` directly — acceptable with 1 consumer crate.
-- S1b+ (when 2nd crate needs contract access): Migrate to a dedicated `bindings/` crate that uses `sol!` internally. Consumer crates depend on `bindings/`, not on Alloy directly. This gives compile-time safety, zero drift, single source of truth, and minimal deps in consumers.
+- S1b+ (when 2nd crate needs contract access): Migrate to a dedicated `bindings/` crate that uses `sol!` internally. Consumer crates depend on `bindings/`, not on Alloy directly.
 - Pre-generated committed bindings (like `forge bind --alloy` output) are explicitly rejected — drift risk and 28K+ tokens of generated code in repo.
-- Migration is mechanical (~15 min): move `sol!` call to `bindings/src/lib.rs`, update consumer deps.
 
 ### 3.4 contracts/ (Solidity / Foundry)
 
@@ -295,7 +294,7 @@ The device address (Ethereum address derived from the public key) is the on-chai
 5. Query the smart contract: is this recovered address registered as a device?
 6. If registered: VERIFIED. If not: UNVERIFIED.
 
-This verification can happen off-chain (in Rust using the common library) or on-chain (calling a contract function that uses ecrecover).
+This verification can happen off-chain (in Rust using the protocol library) or on-chain (calling a contract function that uses ecrecover).
 
 ### 6.5 Key Storage Risk
 
@@ -447,7 +446,7 @@ The following decisions from this architecture document should be captured as in
 
 | ADR | Decision |
 |-----|----------|
-| 0001 | Monorepo flat structure (device/, attester/, common/, contracts/, webapp/) |
+| 0001 | Monorepo flat structure (device/, attester/, protocol/, contracts/, webapp/) |
 | 0002 | secp256k1/ECDSA over ed25519 for EVM compatibility |
 | 0003 | Alloy for Rust-EVM bindings over ethers-rs |
 | 0004 | Single smart contract for registry + attestation |
@@ -483,7 +482,7 @@ Contract deployment to Sepolia uses Foundry deploy scripts. Webapp hosting decis
 
 Aligned with the story map:
 
-1. **Slice 1 (CLI):** contracts + device + attester + common. Full end-to-end via terminal.
+1. **Slice 1 (CLI):** contracts + device + attester + protocol. Full end-to-end via terminal.
 2. **Slice 2 (Portal):** webapp added. Attester registration and public verification move to web.
 3. **Slice 3 (Polish):** demo view, continuous emission, attestation provenance display.
 
