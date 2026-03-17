@@ -210,4 +210,110 @@ mod tests {
         // Integration test — run manually with:
         // cargo test -p attester -- --ignored
     }
+
+    #[test]
+    fn register_with_invalid_address_prints_error() {
+        let output = ProcessCommand::new(attester_bin())
+            .args([
+                "register",
+                "--serial",
+                "TEST-001",
+                "--device-address",
+                "NOT_AN_ADDRESS",
+                "--contract",
+                "0x0000000000000000000000000000000000000000",
+            ])
+            .output()
+            .expect("failed to run attester binary");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.contains("address") || stderr.contains("invalid"),
+            "expected error about address, got: {stderr}"
+        );
+        assert!(!stderr.contains("panic"), "should not panic, got: {stderr}");
+    }
+
+    #[test]
+    fn register_with_invalid_contract_prints_error() {
+        let output = ProcessCommand::new(attester_bin())
+            .args([
+                "register",
+                "--serial",
+                "TEST-001",
+                "--device-address",
+                "0x0000000000000000000000000000000000000001",
+                "--contract",
+                "GARBAGE",
+            ])
+            .output()
+            .expect("failed to run attester binary");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.contains("address") || stderr.contains("invalid") || stderr.contains("contract"),
+            "expected error about address/contract, got: {stderr}"
+        );
+        assert!(!stderr.contains("panic"), "should not panic, got: {stderr}");
+    }
+
+    #[test]
+    fn verify_with_missing_fields_prints_error() {
+        let tmp = tempfile::NamedTempFile::new().expect("create temp file");
+        std::fs::write(
+            tmp.path(),
+            r#"{"serial":"X","address":"Y","temperature":1.0}"#,
+        )
+        .unwrap();
+
+        let output = ProcessCommand::new(attester_bin())
+            .args([
+                "verify",
+                "--file",
+                tmp.path().to_str().unwrap(),
+                "--contract",
+                "0x0000000000000000000000000000000000000000",
+            ])
+            .output()
+            .expect("failed to run attester binary");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.contains("Error:"),
+            "expected 'Error:' on stderr, got: {stderr}"
+        );
+        assert!(
+            stderr.contains("missing field"),
+            "expected 'missing field' on stderr, got: {stderr}"
+        );
+        assert!(!stderr.contains("panic"), "should not panic, got: {stderr}");
+    }
+
+    #[test]
+    fn verify_with_empty_file_prints_error() {
+        let tmp = tempfile::NamedTempFile::new().expect("create temp file");
+        std::fs::write(tmp.path(), "").unwrap();
+
+        let output = ProcessCommand::new(attester_bin())
+            .args([
+                "verify",
+                "--file",
+                tmp.path().to_str().unwrap(),
+                "--contract",
+                "0x0000000000000000000000000000000000000000",
+            ])
+            .output()
+            .expect("failed to run attester binary");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.contains("Error:"),
+            "expected 'Error:' on stderr, got: {stderr}"
+        );
+        assert!(!stderr.contains("panic"), "should not panic, got: {stderr}");
+    }
 }
