@@ -27,6 +27,9 @@ pub fn reading_prehash(reading: &Reading) -> Option<[u8; 32]> {
     let addr_str = reading.address.trim_start_matches("0x");
     let address_bytes: [u8; 20] = hex::decode(addr_str).ok()?.try_into().ok()?;
 
+    // Scale temperature to millidegrees for deterministic hashing.
+    // IMPORTANT: This scaling must match the Solidity-side verification
+    // exactly when on-chain ecrecover is implemented (Slice 2).
     let temp_scaled = (reading.temperature * 1000.0) as i64;
 
     let ts = chrono::DateTime::parse_from_rfc3339(&reading.timestamp)

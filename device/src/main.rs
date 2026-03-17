@@ -99,8 +99,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                 .join("device.key");
 
             if !key_path.exists() {
-                eprintln!("Device not initialized. Run 'device init' first.");
-                std::process::exit(1);
+                return Err("Device not initialized. Run 'device init' first.".into());
             }
 
             let key_hex = std::fs::read_to_string(&key_path)

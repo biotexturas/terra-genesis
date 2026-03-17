@@ -1,5 +1,5 @@
 /// Errors that can occur during protocol signing operations.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ProtocolError {
     /// The reading contains an invalid Ethereum address.
     InvalidAddress(String),
