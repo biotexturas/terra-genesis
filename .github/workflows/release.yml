@@ -20,17 +20,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Verify Cargo version matches tag
-        run: |
-          CARGO_VERSION=$(cargo metadata --no-deps --format-version 1 \
-            | python3 -c "import sys,json; pkgs=json.load(sys.stdin)['packages']; \
-              print(next(p['version'] for p in pkgs if p['name']=='device'))")
-          TAG_VERSION="${RELEASE_VERSION#v}"
-          if [ "${CARGO_VERSION}" != "${TAG_VERSION}" ]; then
-            echo "ERROR: Cargo.toml version (${CARGO_VERSION}) does not match tag (${TAG_VERSION})"
-            echo "Use 'cargo release' to cut releases, not 'git tag' directly."
-            exit 1
-          fi
-          echo "Version check OK: ${CARGO_VERSION}"
+        run: bash scripts/check-version.sh
 
       - uses: foundry-rs/foundry-toolchain@v1
 
@@ -65,17 +55,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Verify Cargo version matches tag
-        run: |
-          CARGO_VERSION=$(cargo metadata --no-deps --format-version 1 \
-            | python3 -c "import sys,json; pkgs=json.load(sys.stdin)['packages']; \
-              print(next(p['version'] for p in pkgs if p['name']=='device'))")
-          TAG_VERSION="${RELEASE_VERSION#v}"
-          if [ "${CARGO_VERSION}" != "${TAG_VERSION}" ]; then
-            echo "ERROR: Cargo.toml version (${CARGO_VERSION}) does not match tag (${TAG_VERSION})"
-            echo "Use 'cargo release' to cut releases, not 'git tag' directly."
-            exit 1
-          fi
-          echo "Version check OK: ${CARGO_VERSION}"
+        run: bash scripts/check-version.sh
 
       - uses: foundry-rs/foundry-toolchain@v1
 
@@ -104,17 +84,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Verify Cargo version matches tag
-        run: |
-          CARGO_VERSION=$(cargo metadata --no-deps --format-version 1 \
-            | python3 -c "import sys,json; pkgs=json.load(sys.stdin)['packages']; \
-              print(next(p['version'] for p in pkgs if p['name']=='device'))")
-          TAG_VERSION="${RELEASE_VERSION#v}"
-          if [ "${CARGO_VERSION}" != "${TAG_VERSION}" ]; then
-            echo "ERROR: Cargo.toml version (${CARGO_VERSION}) does not match tag (${TAG_VERSION})"
-            echo "Use 'cargo release' to cut releases, not 'git tag' directly."
-            exit 1
-          fi
-          echo "Version check OK: ${CARGO_VERSION}"
+        run: bash scripts/check-version.sh
 
       - uses: foundry-rs/foundry-toolchain@v1
 
