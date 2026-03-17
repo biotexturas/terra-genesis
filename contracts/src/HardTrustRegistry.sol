@@ -12,6 +12,9 @@ contract HardTrustRegistry {
     }
 
     error NotAttester();
+    error DeviceAlreadyRegistered(bytes32 serialHash);
+
+    event DeviceRegistered(bytes32 indexed serialHash, address indexed deviceAddr, address indexed attester);
 
     address public immutable OWNER;
     address public immutable ATTESTER;
@@ -28,8 +31,10 @@ contract HardTrustRegistry {
     /// @param deviceAddr Ethereum address derived from the device's public key
     function registerDevice(bytes32 serialHash, address deviceAddr) external {
         if (msg.sender != ATTESTER) revert NotAttester();
+        if (devices[serialHash].active) revert DeviceAlreadyRegistered(serialHash);
         devices[serialHash] =
             Device({deviceAddr: deviceAddr, attester: msg.sender, attestedAt: block.timestamp, active: true});
+        emit DeviceRegistered(serialHash, deviceAddr, msg.sender);
     }
 
     /// @notice Query a device record by serial hash. Returns zero values if not found.
