@@ -88,12 +88,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .registerDevice(reg.serial_hash, device_address)
                 .send()
                 .await
-                .map_err(|e| format!("registration transaction failed: {e}"))?
+                .map_err(|e| {
+                    let err_str = format!("{e}");
+                    // DeviceAlreadyRegistered(bytes32) selector = 0xa98bbce0
+                    if err_str.contains("DeviceAlreadyRegistered") || err_str.contains("a98bbce0") {
+                        format!("device already registered (serial hash: {})", reg.serial_hash)
+                    } else {
+                        format!("registration transaction failed: {e}")
+                    }
+                })?
                 .watch()
                 .await
                 .map_err(|e| format!("registration transaction failed: {e}"))?;
 
-            println!("tx: {tx}");
+            println!("Registered device. tx: {tx}");
         }
         Command::Verify { file, contract } => {
             let json = std::fs::read_to_string(&file)
@@ -209,6 +217,77 @@ mod tests {
     fn verify_registered_device() {
         // Integration test — run manually with:
         // cargo test -p attester -- --ignored
+    }
+
+    #[test]
+    #[ignore] // Requires Anvil + deployed contract
+    fn register_duplicate_shows_human_error() {
+        let contract = std::env::var("HARDTRUST_CONTRACT")
+            .expect("HARDTRUST_CONTRACT env var must be set");
+        let serial = format!("DUP-TEST-{}", std::process::id());
+        let device_addr = "0x0000000000000000000000000000000000000042";
+
+        // First registration — should succeed
+        let output1 = ProcessCommand::new(attester_bin())
+            .args([
+                "register",
+                "--serial", &serial,
+                "--device-address", device_addr,
+                "--contract", &contract,
+            ])
+            .output()
+            .expect("failed to run attester register");
+        assert!(output1.status.success(), "first register should succeed: {}",
+            String::from_utf8_lossy(&output1.stderr));
+
+        // Second registration — same serial, should fail with human-readable error
+        let output2 = ProcessCommand::new(attester_bin())
+            .args([
+                "register",
+                "--serial", &serial,
+                "--device-address", device_addr,
+                "--contract", &contract,
+            ])
+            .output()
+            .expect("failed to run attester register");
+
+        assert!(!output2.status.success());
+        let stderr = String::from_utf8(output2.stderr).unwrap();
+        assert!(
+            stderr.contains("device already registered"),
+            "expected human-readable duplicate error, got: {stderr}"
+        );
+    }
+
+    #[test]
+    #[ignore] // Requires Anvil + deployed contract
+    fn register_success_shows_confirmation() {
+        let contract = std::env::var("HARDTRUST_CONTRACT")
+            .expect("HARDTRUST_CONTRACT env var must be set");
+        let serial = format!("SUCCESS-TEST-{}", std::process::id());
+        let device_addr = "0x0000000000000000000000000000000000000099";
+
+        let output = ProcessCommand::new(attester_bin())
+            .args([
+                "register",
+                "--serial", &serial,
+                "--device-address", device_addr,
+                "--contract", &contract,
+            ])
+            .output()
+            .expect("failed to run attester register");
+
+        assert!(output.status.success(), "register should succeed: {}",
+            String::from_utf8_lossy(&output.stderr));
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(
+            stdout.contains("Registered device"),
+            "expected 'Registered device' in output, got: {stdout}"
+        );
+        assert!(
+            stdout.contains("tx:"),
+            "expected 'tx:' in output, got: {stdout}"
+        );
     }
 
     #[test]
