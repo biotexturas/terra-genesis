@@ -1,8 +1,6 @@
 anvil_rpc_url       := "http://127.0.0.1:8545"
 anvil_deployer_key  := "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 anvil_attester_addr := "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
-dev_serial          := "HARDCODED-001"
-dev_address         := "0x1234567890abcdef1234567890abcdef12345678"
 
 # Build contracts (ABI needed by attester)
 forge-build:
@@ -29,6 +27,4 @@ ci: lint test
 # E2E: The Wire — complete walking skeleton gate
 e2e-the-wire:
     @ATTESTER_ADDRESS={{anvil_attester_addr}} \
-     DEV_SERIAL={{dev_serial}} \
-     DEV_ADDRESS={{dev_address}} \
      bash scripts/e2e-the-wire.sh

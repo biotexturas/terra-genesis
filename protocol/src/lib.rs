@@ -1,5 +1,4 @@
 pub mod crypto;
-pub mod dev_config;
 pub mod domain;
 pub mod error;
 

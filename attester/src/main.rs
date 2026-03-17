@@ -7,7 +7,7 @@ use attester::{
     VerificationResult,
 };
 use clap::{Parser, Subcommand};
-use hardtrust_protocol::{dev_config, Reading};
+use hardtrust_protocol::Reading;
 
 sol!(
     #[sol(rpc)]
@@ -57,6 +57,13 @@ enum Command {
     },
 }
 
+fn env_rpc_url() -> Result<url::Url, Box<dyn std::error::Error>> {
+    let raw =
+        std::env::var("HARDTRUST_RPC_URL").unwrap_or_else(|_| "http://127.0.0.1:8545".to_string());
+    raw.parse()
+        .map_err(|_| format!("invalid RPC URL: {raw}").into())
+}
+
 #[tokio::main]
 async fn main() {
     if let Err(e) = run().await {
@@ -75,16 +82,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let reg = prepare_registration(&serial);
 
-            let signer: PrivateKeySigner = dev_config::DEV_PRIVATE_KEY
-                .parse()
-                .map_err(|_| "invalid attester private key")?;
+            let private_key_hex = std::env::var("HARDTRUST_PRIVATE_KEY")
+                .map_err(|_| "HARDTRUST_PRIVATE_KEY env var is required. Set it to the attester's hex-encoded private key.")?;
+            let signer: PrivateKeySigner = private_key_hex.parse().map_err(|_| {
+                "invalid HARDTRUST_PRIVATE_KEY — must be a hex-encoded private key (e.g. 0x...)"
+            })?;
             let wallet = EthereumWallet::from(signer);
 
-            let provider = ProviderBuilder::new().wallet(wallet).connect_http(
-                dev_config::DEV_RPC_URL
-                    .parse()
-                    .map_err(|_| "invalid RPC URL")?,
-            );
+            let provider = ProviderBuilder::new()
+                .wallet(wallet)
+                .connect_http(env_rpc_url()?);
 
             let registry = HardTrustRegistry::new(contract, &provider);
             let tx = registry
@@ -118,11 +125,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             let reg = prepare_registration(&reading.serial);
 
-            let provider = ProviderBuilder::new().connect_http(
-                dev_config::DEV_RPC_URL
-                    .parse()
-                    .map_err(|_| "invalid RPC URL")?,
-            );
+            let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
 
             let registry = HardTrustRegistry::new(contract, &provider);
             let result = registry
@@ -298,6 +301,30 @@ mod tests {
             "expected 'missing field' on stderr, got: {stderr}"
         );
         assert!(!stderr.contains("panic"), "should not panic, got: {stderr}");
+    }
+
+    #[test]
+    fn register_without_private_key_env_shows_clear_error() {
+        let output = ProcessCommand::new(attester_bin())
+            .env_remove("HARDTRUST_PRIVATE_KEY")
+            .args([
+                "register",
+                "--serial",
+                "TEST-001",
+                "--device-address",
+                "0x0000000000000000000000000000000000000001",
+                "--contract",
+                "0x0000000000000000000000000000000000000001",
+            ])
+            .output()
+            .expect("failed to run attester binary");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.contains("HARDTRUST_PRIVATE_KEY"),
+            "expected error mentioning HARDTRUST_PRIVATE_KEY, got: {stderr}"
+        );
     }
 
     #[test]

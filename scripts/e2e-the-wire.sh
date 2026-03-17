@@ -7,6 +7,10 @@ anvil &
 ANVIL_PID=$!
 sleep 2
 
+# Attester configuration — Anvil account #1 (well-known dev key)
+export HARDTRUST_RPC_URL="http://127.0.0.1:8545"
+export HARDTRUST_PRIVATE_KEY="0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+
 # Build everything
 cd contracts && forge build && cd ..
 cargo build --workspace

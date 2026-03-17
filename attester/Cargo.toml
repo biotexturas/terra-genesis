@@ -8,6 +8,7 @@ clap = { version = "4", features = ["derive"] }
 alloy = { version = "1", features = ["contract", "providers", "signers", "signer-local", "network", "sol-types"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 hardtrust-protocol = { path = "../protocol" }
+url = "2"
 serde_json = "1"
 hex = "0.4"
 

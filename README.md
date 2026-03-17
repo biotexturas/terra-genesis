@@ -26,6 +26,17 @@ What it does:
 6. Runs `attester verify` on the reading — expects **VERIFIED**
 7. Runs `attester verify` on a fake reading — expects **UNVERIFIED**
 
+## Configuration
+
+The attester binary reads configuration from environment variables:
+
+| Env Var | Required | Default | Description |
+|---------|----------|---------|-------------|
+| `HARDTRUST_PRIVATE_KEY` | Yes (for `register`) | — | Attester signing key (hex-encoded, e.g. `0x...`) |
+| `HARDTRUST_RPC_URL` | No | `http://127.0.0.1:8545` | Ethereum JSON-RPC endpoint |
+
+For local development with Anvil, the e2e script sets these automatically.
+
 ## Architecture
 
 ```
