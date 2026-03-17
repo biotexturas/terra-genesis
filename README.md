@@ -22,7 +22,7 @@ What it does:
 2. Deploys the `HardTrustRegistry` contract
 3. Runs `device init` to print device identity (serial + address)
 4. Runs `attester register` to register the device on-chain
-5. Runs `device emit` to write a mock `reading.json`
+5. Runs `device emit` to write a signed `reading.json` (with real CPU temp or emulated)
 6. Runs `attester verify` on the reading — expects **VERIFIED**
 7. Runs `attester verify` on a fake reading — expects **UNVERIFIED**
 
@@ -32,7 +32,7 @@ What it does:
 contracts/       Solidity smart contract (Foundry) — HardTrustRegistry
 device/          Rust binary — device identity and data emission
 attester/        Rust binary — CLI for registration and verification
-types/           Rust library — shared Reading struct and dev constants
+protocol/        Rust library — shared protocol types, crypto, and error handling
 ```
 
 ## Prerequisites
@@ -78,7 +78,7 @@ hardtrust/
 │   └── script/         # Deploy scripts
 ├── device/             # Rust binary — device CLI
 ├── attester/           # Rust binary — attester CLI
-├── types/              # Rust library — shared types and dev constants
+├── protocol/           # Rust library — shared protocol (Reading, crypto, errors)
 ├── scripts/            # Shell scripts (e2e flows)
 ├── docs/
 │   ├── adr/            # Architecture Decision Records
@@ -106,6 +106,7 @@ GitHub Actions runs on every push and PR to `main`:
 |-----|----------------|
 | **lint** | `cargo fmt`, `cargo clippy`, `forge fmt`, `solhint` |
 | **test** | `cargo test`, `forge test` |
+| **e2e** | `just e2e-the-wire` — full end-to-end walking skeleton |
 
 ## License
 

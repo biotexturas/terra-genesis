@@ -33,7 +33,7 @@ When a spec references other specs or stories (e.g., "depends on S1a.1"), read t
 ### Quality
 - Tests are part of the story — write tests alongside implementation, not after
 - Every acceptance criterion in the story should have at least one test
-- No `.unwrap()` in library code (`common/`) — use `Result` with descriptive errors
+- No `.unwrap()` in library code (`protocol/`) — use `Result` with descriptive errors
 - All public functions must have doc comments
 
 ### Architecture Decisions
