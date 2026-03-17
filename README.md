@@ -41,6 +41,7 @@ protocol/        Rust library — shared protocol types, crypto, and error handl
 - [Foundry](https://getfoundry.sh/) (`forge`, `cast`, `anvil`)
 - [just](https://github.com/casey/just) (task runner)
 - [Node.js](https://nodejs.org/) (for `solhint`)
+- [aderyn](https://github.com/Cyfrin/aderyn) (optional, local-only — Solidity static analysis)
 
 ## Quick Start
 
