@@ -36,6 +36,10 @@ build-device-release:
 build-attester-release:
     RELEASE_VERSION=dev bash scripts/build-attester.sh
 
+# Verify Cargo.toml version matches RELEASE_VERSION (local debug)
+check-version:
+    RELEASE_VERSION=v0.1.0 bash scripts/check-version.sh
+
 # E2E: The Wire — complete walking skeleton gate
 e2e-the-wire:
     @ATTESTER_ADDRESS={{anvil_attester_addr}} \
