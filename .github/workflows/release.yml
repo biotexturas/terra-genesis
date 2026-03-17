@@ -38,7 +38,9 @@ jobs:
           echo "${CARGO_HOME}/bin" >> "$GITHUB_PATH"
 
       - name: Build device (ARMv7 musl)
-        run: bash scripts/build-device.sh
+        run: |
+          export PATH="${CARGO_HOME}/bin:${PATH}"
+          bash scripts/build-device.sh
 
       - uses: actions/upload-artifact@v4
         with:
