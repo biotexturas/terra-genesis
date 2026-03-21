@@ -4,6 +4,7 @@ import {
   Contract,
   JsonRpcProvider,
   formatEther,
+  getBytes,
   isAddress,
   keccak256,
   toUtf8Bytes,
@@ -131,6 +132,170 @@ function normalizeRegisteredDevice(serialHash, details) {
   };
 }
 
+function bytesToHex(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashFile(file) {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+
+  return {
+    hash: `sha256:${bytesToHex(new Uint8Array(hashBuffer))}`,
+    size: buffer.byteLength,
+  };
+}
+
+async function parseJsonFile(file) {
+  return JSON.parse(await file.text());
+}
+
+function computeContentHash(files) {
+  const encoder = new TextEncoder();
+  const sortedFiles = [...files].sort((left, right) => left.name.localeCompare(right.name));
+  const parts = sortedFiles.flatMap((file) => [
+    ...encoder.encode(file.name),
+    ...encoder.encode(file.hash.replace("sha256:", "")),
+  ]);
+
+  return crypto.subtle
+    .digest("SHA-256", new Uint8Array(parts))
+    .then((hashBuffer) => `sha256:${bytesToHex(new Uint8Array(hashBuffer))}`);
+}
+
+function concatBytes(...parts) {
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+
+  parts.forEach((part) => {
+    result.set(part, offset);
+    offset += part.length;
+  });
+
+  return result;
+}
+
+function bigintToUint64Bytes(value) {
+  const result = new Uint8Array(8);
+  let current = value;
+
+  for (let index = 7; index >= 0; index -= 1) {
+    result[index] = Number(current & 0xffn);
+    current >>= 8n;
+  }
+
+  return result;
+}
+
+function sha256StringToBytes32(value) {
+  if (typeof value !== "string") {
+    throw new Error("Expected sha256 string.");
+  }
+
+  const hex = value.startsWith("sha256:") ? value.slice(7) : value;
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error(`Invalid SHA-256 hash: ${value}`);
+  }
+
+  return `0x${hex.toLowerCase()}`;
+}
+
+function parseCaptureSignature(signatureHex) {
+  const normalized = signatureHex?.trim().replace(/^0x/i, "") || "";
+  if (!/^[0-9a-fA-F]{130}$/.test(normalized)) {
+    throw new Error("Invalid capture signature.");
+  }
+
+  const recoveryId = Number.parseInt(normalized.slice(128, 130), 16);
+
+  return {
+    r: `0x${normalized.slice(0, 64)}`,
+    s: `0x${normalized.slice(64, 128)}`,
+    v: recoveryId + 27,
+  };
+}
+
+function computeCapturePrehash(capture) {
+  const contentHash = sha256StringToBytes32(capture.content_hash);
+  const timestampSeconds = Date.parse(capture.timestamp);
+
+  if (Number.isNaN(timestampSeconds)) {
+    throw new Error("Invalid capture timestamp.");
+  }
+
+  const encoder = new TextEncoder();
+  const preimage = concatBytes(
+    getBytes(keccak256(toUtf8Bytes(capture.serial))),
+    getBytes(capture.address),
+    getBytes(contentHash),
+    bigintToUint64Bytes(BigInt(Math.floor(timestampSeconds / 1000))),
+    encoder.encode(capture.environment.script_hash),
+    encoder.encode(capture.environment.binary_hash),
+    encoder.encode(capture.environment.hw_serial),
+    encoder.encode(capture.environment.camera_info),
+  );
+
+  return keccak256(preimage);
+}
+
+async function verifyCaptureOnChain(manifest) {
+  if (!appConfig.contractAddress) {
+    return {
+      available: false,
+      verified: false,
+      message: "Set VITE_CONTRACT_ADDRESS to enable on-chain verification.",
+    };
+  }
+
+  const provider = new JsonRpcProvider(appConfig.rpcUrl);
+  const contract = new Contract(appConfig.contractAddress, registryAbi, provider);
+  const captureHash = computeCapturePrehash(manifest);
+  const { v, r, s } = parseCaptureSignature(manifest.signature);
+  const scriptHash = sha256StringToBytes32(manifest.environment.script_hash);
+  const binaryHash = sha256StringToBytes32(manifest.environment.binary_hash);
+  const zeroHash = `0x${"0".repeat(64)}`;
+
+  try {
+    const [result, approvedScriptHash, approvedBinaryHash] = await Promise.all([
+      contract.verifyCapture(captureHash, v, r, s, scriptHash, binaryHash),
+      contract.approvedScriptHash(),
+      contract.approvedBinaryHash(),
+    ]);
+
+    const scriptConfigured = approvedScriptHash.toLowerCase() !== zeroHash;
+    const binaryConfigured = approvedBinaryHash.toLowerCase() !== zeroHash;
+    const scriptAccepted = !scriptConfigured || result.scriptMatch;
+    const binaryAccepted = !binaryConfigured || result.binaryMatch;
+
+    return {
+      available: true,
+      verified: result.valid && scriptAccepted && binaryAccepted,
+      valid: result.valid,
+      signer: result.signer,
+      scriptMatch: result.scriptMatch,
+      binaryMatch: result.binaryMatch,
+      scriptConfigured,
+      binaryConfigured,
+      captureHash,
+      message: result.valid ? "On-chain verification completed." : "Recovered signer is not registered.",
+    };
+  } catch (error) {
+    return {
+      available: true,
+      verified: false,
+      valid: false,
+      signer: "",
+      scriptMatch: false,
+      binaryMatch: false,
+      scriptConfigured: false,
+      binaryConfigured: false,
+      captureHash,
+      message: extractError(error),
+    };
+  }
+}
+
 function AppContent() {
   const [devices, setDevices] = useState([]);
   const [attesterAddress, setAttesterAddress] = useState("");
@@ -149,6 +314,13 @@ function AppContent() {
   const [submitting, setSubmitting] = useState(false);
   const [txHash, setTxHash] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [verifyingDemoCapture, setVerifyingDemoCapture] = useState(false);
+  const [demoVerification, setDemoVerification] = useState(null);
+  const [demoVerificationError, setDemoVerificationError] = useState("");
+  const [captureImageFile, setCaptureImageFile] = useState(null);
+  const [metadataFile, setMetadataFile] = useState(null);
+  const [signFile, setSignFile] = useState(null);
+  const [capturePreviewUrl, setCapturePreviewUrl] = useState("");
 
   const hasContractAddress = Boolean(appConfig.contractAddress);
   const walletChainMatches =
@@ -241,7 +413,7 @@ function AppContent() {
 
     try {
       const provider = new BrowserProvider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
+      await provider.send("eth_requestAccounts", []); //not working
       const signer = await provider.getSigner();
       const signerAddress = await signer.getAddress();
       console.log(`Wallet connected: ${signerAddress}`);
@@ -312,6 +484,77 @@ function AppContent() {
     }
   }
 
+  async function handleVerifyDemoCapture() {
+    setVerifyingDemoCapture(true);
+    setDemoVerificationError("");
+
+    try {
+      if (!captureImageFile || !metadataFile || !signFile) {
+        throw new Error("Choose an image, metadata.json, and sign.json before verifying.");
+      }
+
+      const manifest = await parseJsonFile(signFile);
+      const expectedFiles = new Map(manifest.files.map((file) => [file.name, file]));
+
+      const actualFiles = await Promise.all([
+        hashFile(captureImageFile).then((file) => ({ ...file, name: captureImageFile.name })),
+        hashFile(metadataFile).then((file) => ({ ...file, name: metadataFile.name })),
+      ]);
+
+      const fileResults = actualFiles.map((file) => {
+        const expected = expectedFiles.get(file.name);
+        return {
+          ...file,
+          hashMatches: Boolean(expected) && expected.hash === file.hash,
+          sizeMatches: Boolean(expected) && Number(expected.size) === file.size,
+        };
+      });
+
+      const actualContentHash = await computeContentHash(actualFiles);
+      const filesVerified = fileResults.every((file) => file.hashMatches && file.sizeMatches);
+      const contentHashMatches = manifest.content_hash === actualContentHash;
+      const onChain = await verifyCaptureOnChain(manifest);
+      const verified = filesVerified && contentHashMatches && onChain.verified;
+
+      setDemoVerification({
+        verified,
+        filesVerified,
+        checkedAt: new Date(),
+        contentHashMatches,
+        actualContentHash,
+        expectedContentHash: manifest.content_hash,
+        fileResults,
+        onChain,
+      });
+    } catch (error) {
+      setDemoVerification(null);
+      setDemoVerificationError(extractError(error));
+    } finally {
+      setVerifyingDemoCapture(false);
+    }
+  }
+
+  function handleCaptureImageChange(event) {
+    const nextFile = event.target.files?.[0] || null;
+    setDemoVerification(null);
+    setDemoVerificationError("");
+    setCaptureImageFile(nextFile);
+  }
+
+  function handleMetadataChange(event) {
+    const nextFile = event.target.files?.[0] || null;
+    setDemoVerification(null);
+    setDemoVerificationError("");
+    setMetadataFile(nextFile);
+  }
+
+  function handleSignChange(event) {
+    const nextFile = event.target.files?.[0] || null;
+    setDemoVerification(null);
+    setDemoVerificationError("");
+    setSignFile(nextFile);
+  }
+
   useEffect(() => {
     loadDevices();
   }, []);
@@ -362,6 +605,20 @@ function AppContent() {
       }
     };
   }, [walletAddress]);
+
+  useEffect(() => {
+    if (!captureImageFile) {
+      setCapturePreviewUrl("");
+      return undefined;
+    }
+
+    const nextUrl = URL.createObjectURL(captureImageFile);
+    setCapturePreviewUrl(nextUrl);
+
+    return () => {
+      URL.revokeObjectURL(nextUrl);
+    };
+  }, [captureImageFile]);
 
   return (
     <div className="shell">
@@ -600,6 +857,202 @@ function AppContent() {
             <p className="message success">
               Transaction confirmed: <code>{txHash}</code>
             </p>
+          ) : null}
+        </section>
+
+        <section className="panel demo-verify-panel">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Capture verify</p>
+              <h2>Choose your own files and run the MVP verification flow.</h2>
+            </div>
+            <span
+              className={`badge ${
+                demoVerification
+                  ? demoVerification.verified
+                    ? "success"
+                    : "warning"
+                  : "neutral"
+              }`}
+            >
+              {demoVerification
+                ? `verified: ${demoVerification.verified ? "true" : "false"}`
+                : "Not checked"}
+            </span>
+          </div>
+
+          <div className="demo-verify-grid">
+            <div className="demo-preview-card">
+              {capturePreviewUrl ? (
+                <img
+                  className="demo-preview-image"
+                  src={capturePreviewUrl}
+                  alt="Selected capture preview"
+                />
+              ) : (
+                <div className="demo-preview-empty">Choose an image to preview it here.</div>
+              )}
+            </div>
+
+            <div className="demo-verify-copy">
+              <p>
+                Select your capture image, `metadata.json`, and `sign.json`.
+              </p>
+              <p>
+                Clicking `verify` hashes the selected image and metadata file, compares them with
+                the manifest in `sign.json`, and returns a simple true or false result.
+              </p>
+
+              <div className="register-form">
+                <label>
+                  <span>Image file</span>
+                  <input type="file" accept="image/*" onChange={handleCaptureImageChange} />
+                </label>
+
+                <label>
+                  <span>metadata.json</span>
+                  <input type="file" accept=".json,application/json" onChange={handleMetadataChange} />
+                </label>
+
+                <label>
+                  <span>sign.json</span>
+                  <input type="file" accept=".json,application/json" onChange={handleSignChange} />
+                </label>
+              </div>
+
+              <div className="demo-selected-files">
+                <span>{captureImageFile ? captureImageFile.name : "No image selected"}</span>
+                <span>{metadataFile ? metadataFile.name : "No metadata selected"}</span>
+                <span>{signFile ? signFile.name : "No sign file selected"}</span>
+              </div>
+
+              <div className="form-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={handleVerifyDemoCapture}
+                  disabled={
+                    verifyingDemoCapture || !captureImageFile || !metadataFile || !signFile
+                  }
+                >
+                  {verifyingDemoCapture ? "Verifying..." : "verify"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {demoVerificationError ? <p className="message error">{demoVerificationError}</p> : null}
+
+          {demoVerification ? (
+            <div className="demo-result-grid">
+              <article className="status-pill">
+                <span>Verification result</span>
+                <strong>{demoVerification.verified ? "true" : "false"}</strong>
+              </article>
+              <article className="status-pill">
+                <span>Local files</span>
+                <strong>{demoVerification.filesVerified ? "match" : "mismatch"}</strong>
+              </article>
+              <article className="status-pill">
+                <span>Content hash</span>
+                <strong>{demoVerification.contentHashMatches ? "match" : "mismatch"}</strong>
+              </article>
+              <article className="status-pill">
+                <span>On-chain</span>
+                <strong>
+                  {demoVerification.onChain.available
+                    ? demoVerification.onChain.verified
+                      ? "verified"
+                      : "failed"
+                    : "unavailable"}
+                </strong>
+              </article>
+              <article className="status-pill">
+                <span>Recovered signer</span>
+                <strong>
+                  {demoVerification.onChain.signer
+                    ? shortAddress(demoVerification.onChain.signer)
+                    : "-"}
+                </strong>
+              </article>
+              <article className="status-pill">
+                <span>Checked at</span>
+                <strong>{demoVerification.checkedAt.toLocaleTimeString()}</strong>
+              </article>
+            </div>
+          ) : null}
+
+          {demoVerification ? (
+            <div className="demo-result-grid">
+              <article className="status-pill">
+                <span>Registered device</span>
+                <strong>{demoVerification.onChain.valid ? "yes" : "no"}</strong>
+              </article>
+              <article className="status-pill">
+                <span>Script hash</span>
+                <strong>
+                  {demoVerification.onChain.scriptConfigured
+                    ? demoVerification.onChain.scriptMatch
+                      ? "match"
+                      : "mismatch"
+                    : "not configured"}
+                </strong>
+              </article>
+              <article className="status-pill">
+                <span>Binary hash</span>
+                <strong>
+                  {demoVerification.onChain.binaryConfigured
+                    ? demoVerification.onChain.binaryMatch
+                      ? "match"
+                      : "mismatch"
+                    : "not configured"}
+                </strong>
+              </article>
+            </div>
+          ) : null}
+
+          {demoVerification?.onChain?.message ? (
+            <p
+              className={`message ${
+                demoVerification.onChain.verified ? "success" : "error"
+              }`}
+            >
+              {demoVerification.onChain.message}
+            </p>
+          ) : null}
+
+          {demoVerification ? (
+            <div className="demo-file-grid">
+              {demoVerification.fileResults.map((file) => (
+                <article className="device-card" key={file.name}>
+                  <div className="device-card-head">
+                    <span
+                      className={`badge ${
+                        file.hashMatches && file.sizeMatches ? "success" : "warning"
+                      }`}
+                    >
+                      {file.hashMatches && file.sizeMatches ? "verified" : "failed"}
+                    </span>
+                    <span>{file.size} bytes</span>
+                  </div>
+                  <h3>{file.name}</h3>
+                  <dl>
+                    <div>
+                      <dt>Hash</dt>
+                      <dd>{file.hash}</dd>
+                    </div>
+                    <div>
+                      <dt>Status</dt>
+                      <dd>
+                        {file.hashMatches && file.sizeMatches
+                          ? "Hash and size match manifest"
+                          : "Hash or size mismatch"}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
           ) : null}
         </section>
       </main>
