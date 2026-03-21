@@ -1,13 +1,16 @@
 use alloy::{
-    network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
-    signers::local::PrivateKeySigner, sol,
+    network::EthereumWallet,
+    primitives::{Address, FixedBytes},
+    providers::ProviderBuilder,
+    signers::local::PrivateKeySigner,
+    sol,
 };
 use attester::{
     classify_registration_error, prepare_registration, verify_device_data, RegistrationError,
     VerificationResult,
 };
 use clap::{Parser, Subcommand};
-use hardtrust_protocol::{Capture, Reading};
+use hardtrust_protocol::{Capture, Reading, Signable};
 
 /// Release hashes embedded at compile time.
 /// In debug builds, this is empty (env check skipped gracefully).
@@ -151,19 +154,33 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let data: DeviceData = serde_json::from_str(&json)
                 .map_err(|e| format!("invalid JSON (expected reading or capture): {e}"))?;
 
-            let (serial, verification) = match &data {
+            match &data {
                 DeviceData::Capture(c) => {
-                    let reg = prepare_registration(&c.serial);
-                    let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
-                    let registry = HardTrustRegistry::new(contract, &provider);
-                    let result = registry
-                        .getDevice(reg.serial_hash)
-                        .call()
-                        .await
-                        .map_err(|e| format!("contract query failed: {e}"))?;
-                    (c.serial.clone(), verify_device_data(c, result.deviceAddr))
+                    // On-chain verification via verifyCapture view function
+                    match extract_capture_sig(c) {
+                        Ok((prehash, v, r, s)) => {
+                            let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
+                            let registry = HardTrustRegistry::new(contract, &provider);
+                            let result = registry.verifyCapture(prehash, v, r, s).call().await;
+                            match result {
+                                Ok(res) if res.valid => {
+                                    println!("VERIFIED (on-chain) — signer: {}", res.signer);
+                                }
+                                Ok(res) => {
+                                    println!("UNVERIFIED — signer {} not registered", res.signer);
+                                }
+                                Err(_) => {
+                                    println!("UNVERIFIED — invalid signature");
+                                }
+                            }
+                        }
+                        Err(reason) => {
+                            println!("UNVERIFIED — {reason}");
+                        }
+                    }
                 }
                 DeviceData::Reading(r) => {
+                    // Off-chain verification for readings (unchanged)
                     let reg = prepare_registration(&r.serial);
                     let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
                     let registry = HardTrustRegistry::new(contract, &provider);
@@ -172,15 +189,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         .call()
                         .await
                         .map_err(|e| format!("contract query failed: {e}"))?;
-                    (r.serial.clone(), verify_device_data(r, result.deviceAddr))
+                    let verification = verify_device_data(r, result.deviceAddr);
+                    match verification {
+                        VerificationResult::Verified => println!("VERIFIED"),
+                        VerificationResult::Unverified(_) => println!("UNVERIFIED"),
+                    }
                 }
             };
-
-            let _ = serial; // used in future logging
-            match verification {
-                VerificationResult::Verified => println!("VERIFIED"),
-                VerificationResult::Unverified(_) => println!("UNVERIFIED"),
-            }
 
             // Environment verification for captures
             if let DeviceData::Capture(c) = &data {
@@ -221,6 +236,30 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
+}
+
+/// Extract (prehash, v, r, s) from a Capture for on-chain verification.
+/// Returns Err(reason) if the capture data or signature is invalid.
+fn extract_capture_sig(
+    capture: &Capture,
+) -> Result<(FixedBytes<32>, u8, FixedBytes<32>, FixedBytes<32>), String> {
+    let prehash = capture
+        .prehash()
+        .ok_or_else(|| "invalid capture data".to_string())?;
+
+    let sig_hex = capture.signature.trim_start_matches("0x");
+    let sig_bytes = hex::decode(sig_hex).map_err(|_| "invalid signature hex".to_string())?;
+    if sig_bytes.len() != 65 {
+        return Err("invalid signature length".to_string());
+    }
+
+    let r = FixedBytes::<32>::from_slice(&sig_bytes[..32]);
+    let s = FixedBytes::<32>::from_slice(&sig_bytes[32..64]);
+    // v = recovery_id + 27 (explicit derivation, not defaulted)
+    let recovery_id = sig_bytes[64];
+    let v: u8 = recovery_id + 27;
+
+    Ok((FixedBytes::<32>::from(prehash), v, r, s))
 }
 
 /// Parse SHA256SUMS content into (hash, filename) pairs.
