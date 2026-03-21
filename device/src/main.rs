@@ -74,6 +74,25 @@ fn read_serial() -> String {
     format!("EMULATED-{}", hostname)
 }
 
+/// Load device signing key from ~/.hardtrust/device.key.
+fn load_device_key() -> Result<SigningKey, Box<dyn Error>> {
+    let home = std::env::var("HOME").map_err(|_| "HOME environment variable not set")?;
+    let key_path = std::path::PathBuf::from(&home)
+        .join(".hardtrust")
+        .join("device.key");
+
+    if !key_path.exists() {
+        return Err("Device not initialized. Run 'device init' first.".into());
+    }
+
+    let key_hex = std::fs::read_to_string(&key_path)
+        .map_err(|_| "device.key contains invalid key data")?
+        .trim()
+        .to_string();
+    let key_bytes = hex::decode(&key_hex).map_err(|_| "device.key contains invalid key data")?;
+    SigningKey::from_slice(&key_bytes).map_err(|_| "device.key contains invalid key data".into())
+}
+
 fn main() {
     if let Err(e) = run() {
         eprintln!("Error: {e}");
@@ -113,23 +132,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             println!("Address: {}", identity.address);
         }
         Command::Emit => {
-            let home = std::env::var("HOME").map_err(|_| "HOME environment variable not set")?;
-            let key_path = std::path::PathBuf::from(&home)
-                .join(".hardtrust")
-                .join("device.key");
-
-            if !key_path.exists() {
-                return Err("Device not initialized. Run 'device init' first.".into());
-            }
-
-            let key_hex = std::fs::read_to_string(&key_path)
-                .map_err(|_| "device.key contains invalid key data")?
-                .trim()
-                .to_string();
-            let key_bytes =
-                hex::decode(&key_hex).map_err(|_| "device.key contains invalid key data")?;
-            let signing_key = SigningKey::from_slice(&key_bytes)
-                .map_err(|_| "device.key contains invalid key data")?;
+            let signing_key = load_device_key()?;
 
             let serial = read_serial();
             let timestamp = Utc::now().to_rfc3339();
@@ -157,33 +160,32 @@ fn run() -> Result<(), Box<dyn Error>> {
                 ).into());
             }
 
-            let home = std::env::var("HOME").map_err(|_| "HOME environment variable not set")?;
-            let key_path = std::path::PathBuf::from(&home)
-                .join(".hardtrust")
-                .join("device.key");
+            let signing_key = load_device_key()?;
 
-            if !key_path.exists() {
-                return Err("Device not initialized. Run 'device init' first.".into());
-            }
-
-            let key_hex = std::fs::read_to_string(&key_path)
-                .map_err(|_| "device.key contains invalid key data")?
-                .trim()
-                .to_string();
-            let key_bytes =
-                hex::decode(&key_hex).map_err(|_| "device.key contains invalid key data")?;
-            let signing_key = SigningKey::from_slice(&key_bytes)
-                .map_err(|_| "device.key contains invalid key data")?;
-
-            // Create output dir if needed
+            // Create output dir if needed, then clean stale files
             std::fs::create_dir_all(&output_dir)
                 .map_err(|e| format!("failed to create output dir: {e}"))?;
+            for entry in std::fs::read_dir(&output_dir)
+                .map_err(|e| format!("failed to read output dir: {e}"))?
+            {
+                let entry = entry.map_err(|e| format!("failed to read dir entry: {e}"))?;
+                if entry
+                    .file_type()
+                    .map_err(|e| format!("failed to get file type: {e}"))?
+                    .is_file()
+                {
+                    std::fs::remove_file(entry.path())
+                        .map_err(|e| format!("failed to clean output dir: {e}"))?;
+                }
+            }
 
-            // Execute capture command, passing output_dir as argument
-            let full_cmd = format!("{} {}", cmd, output_dir.display());
+            // Execute capture command, passing output_dir as $1
+            // Using bash -c "cmd" _ "dir" so $1 is properly set and paths with spaces work
             let output = std::process::Command::new("bash")
                 .arg("-c")
-                .arg(&full_cmd)
+                .arg(&cmd)
+                .arg("_")
+                .arg(&output_dir)
                 .output()
                 .map_err(|e| format!("failed to execute capture command: {e}"))?;
 
@@ -594,9 +596,13 @@ mod tests {
         let output_dir = work_dir.path().join("output");
         init_device_key(home_dir.path());
 
-        let cmd = format!("echo hello > {}/test.txt", output_dir.display());
         let output = Command::new(device_bin())
-            .args(["capture", "--cmd", &cmd, "--output-dir"])
+            .args([
+                "capture",
+                "--cmd",
+                "echo hello > \"$1/test.txt\"",
+                "--output-dir",
+            ])
             .arg(&output_dir)
             .env("HOME", home_dir.path())
             .current_dir(work_dir.path())
@@ -626,12 +632,13 @@ mod tests {
         let output_dir = work_dir.path().join("output");
         init_device_key(home_dir.path());
 
-        let cmd = format!(
-            "echo alpha > {0}/a.txt && echo bravo > {0}/b.txt",
-            output_dir.display()
-        );
         let output = Command::new(device_bin())
-            .args(["capture", "--cmd", &cmd, "--output-dir"])
+            .args([
+                "capture",
+                "--cmd",
+                "echo alpha > \"$1/a.txt\" && echo bravo > \"$1/b.txt\"",
+                "--output-dir",
+            ])
             .arg(&output_dir)
             .env("HOME", home_dir.path())
             .current_dir(work_dir.path())
@@ -703,9 +710,13 @@ mod tests {
         let output_dir = work_dir.path().join("output");
         init_device_key(home_dir.path());
 
-        let cmd = format!("echo test > {}/file.txt", output_dir.display());
         Command::new(device_bin())
-            .args(["capture", "--cmd", &cmd, "--output-dir"])
+            .args([
+                "capture",
+                "--cmd",
+                "echo test > \"$1/file.txt\"",
+                "--output-dir",
+            ])
             .arg(&output_dir)
             .env("HOME", home_dir.path())
             .current_dir(work_dir.path())
@@ -736,12 +747,13 @@ mod tests {
         let output_dir = work_dir.path().join("output");
         init_device_key(home_dir.path());
 
-        let cmd = format!(
-            "echo one > {0}/x.txt && echo two > {0}/y.txt",
-            output_dir.display()
-        );
         Command::new(device_bin())
-            .args(["capture", "--cmd", &cmd, "--output-dir"])
+            .args([
+                "capture",
+                "--cmd",
+                "echo one > \"$1/x.txt\" && echo two > \"$1/y.txt\"",
+                "--output-dir",
+            ])
             .arg(&output_dir)
             .env("HOME", home_dir.path())
             .current_dir(work_dir.path())
@@ -803,15 +815,102 @@ mod tests {
     }
 
     #[test]
+    fn capture_cleans_stale_files_from_output_dir() {
+        let home_dir = tempfile::tempdir().unwrap();
+        let work_dir = tempfile::tempdir().unwrap();
+        let output_dir = work_dir.path().join("output");
+        init_device_key(home_dir.path());
+
+        // First capture: creates stale.txt
+        let output = Command::new(device_bin())
+            .args([
+                "capture",
+                "--cmd",
+                "echo first > \"$1/stale.txt\"",
+                "--output-dir",
+            ])
+            .arg(&output_dir)
+            .env("HOME", home_dir.path())
+            .current_dir(work_dir.path())
+            .output()
+            .expect("failed to run first capture");
+        assert!(output.status.success());
+
+        // Second capture: creates only fresh.txt
+        let output = Command::new(device_bin())
+            .args([
+                "capture",
+                "--cmd",
+                "echo second > \"$1/fresh.txt\"",
+                "--output-dir",
+            ])
+            .arg(&output_dir)
+            .env("HOME", home_dir.path())
+            .current_dir(work_dir.path())
+            .output()
+            .expect("failed to run second capture");
+        assert!(output.status.success());
+
+        let contents = std::fs::read_to_string(work_dir.path().join("capture.json")).unwrap();
+        let capture: Capture = serde_json::from_str(&contents).unwrap();
+        // Should only contain fresh.txt, NOT stale.txt
+        assert_eq!(
+            capture.files.len(),
+            1,
+            "expected 1 file, got: {:?}",
+            capture.files
+        );
+        assert_eq!(capture.files[0].name, "fresh.txt");
+    }
+
+    #[test]
+    fn capture_with_spaces_in_output_dir() {
+        let home_dir = tempfile::tempdir().unwrap();
+        let work_dir = tempfile::tempdir().unwrap();
+        let output_dir = work_dir.path().join("dir with spaces");
+        init_device_key(home_dir.path());
+
+        let output = Command::new(device_bin())
+            .args([
+                "capture",
+                "--cmd",
+                "echo test > \"$1/test.txt\"",
+                "--output-dir",
+            ])
+            .arg(&output_dir)
+            .env("HOME", home_dir.path())
+            .current_dir(work_dir.path())
+            .output()
+            .expect("failed to run device capture");
+
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            output.status.success(),
+            "capture with spaces in path failed: stdout={stdout} stderr={stderr}"
+        );
+        assert!(stdout.contains("Wrote capture.json"), "stdout: {stdout}");
+
+        let contents = std::fs::read_to_string(work_dir.path().join("capture.json")).unwrap();
+        let capture: Capture = serde_json::from_str(&contents).unwrap();
+        assert_eq!(capture.files.len(), 1);
+        assert_eq!(capture.files[0].name, "test.txt");
+    }
+
+    #[test]
     fn capture_with_explicit_cmd_still_works() {
         let home_dir = tempfile::tempdir().unwrap();
         let work_dir = tempfile::tempdir().unwrap();
         let output_dir = work_dir.path().join("output");
         init_device_key(home_dir.path());
 
-        let cmd = format!("echo override > {}/test.txt", output_dir.display());
         let output = Command::new(device_bin())
-            .args(["capture", "--cmd", &cmd, "--output-dir"])
+            .args([
+                "capture",
+                "--cmd",
+                "echo override > \"$1/test.txt\"",
+                "--output-dir",
+            ])
             .arg(&output_dir)
             .env("HOME", home_dir.path())
             .current_dir(work_dir.path())
