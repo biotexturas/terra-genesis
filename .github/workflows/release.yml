@@ -45,15 +45,17 @@ jobs:
             device-${{ env.RELEASE_VERSION }}-armv7-unknown-linux-musleabihf.sha256
           if-no-files-found: error
 
-      - name: Generate capture script checksum
-        run: sha256sum terrascope/capture.sh | sed 's|terrascope/||' > terrascope-capture.sh.sha256
+      - name: Prepare capture script artifact
+        run: |
+          cp terrascope/capture.sh terrascope-capture.sh
+          sha256sum terrascope-capture.sh > terrascope-capture.sh.sha256
 
       - name: Upload capture script
         uses: actions/upload-artifact@v4
         with:
           name: terrascope-capture
           path: |
-            terrascope/capture.sh
+            terrascope-capture.sh
             terrascope-capture.sh.sha256
           if-no-files-found: error
 
@@ -134,9 +136,6 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-
-      - name: Rename capture script
-        run: mv artifacts/capture.sh artifacts/terrascope-capture.sh
 
       - name: Aggregate SHA256SUMS
         run: |
