@@ -1,0 +1,25 @@
+{
+  "serial": "00000000ba807092",
+  "address": "0xf3B068b6e0aFfc33717021AFB3DF2A194FAE0706",
+  "timestamp": "2026-03-21T19:43:37.304811009+00:00",
+  "content_hash": "sha256:560ffb4b9d237f05118b6ca4ae0b4d1531998b536d1b84d224c908b51140d275",
+  "files": [
+    {
+      "name": "capture.jpg",
+      "hash": "sha256:2a3c99306da81dc005238b293fc2c6c3a3d574c97baab3de6ca25d8d7fef3bc5",
+      "size": 1223265
+    },
+    {
+      "name": "metadata.json",
+      "hash": "sha256:d5befd9d47dee9fcc8887af7ee2a01c2ec88dbb4aa665fd31d61a79db2703108",
+      "size": 239
+    }
+  ],
+  "environment": {
+    "script_hash": "sha256:a610250465eb5345f3d392dea1c3ad30b84b8e09b7a2ea4c0d2436a51c1d28e9",
+    "binary_hash": "sha256:2ccfcc98af1bd595e3b6edfe5abc6e3bdbd5f7d3ec8784b500b2f1252ff0eebf",
+    "hw_serial": "00000000ba807092",
+    "camera_info": "bcm2835-codec-decode (platform:bcm2835-codec):"
+  },
+  "signature": "0x9f672e6bd7309d284ed0b4606bdd1d101c8c1c8b68c9c8e38cfe152d8256bb9a3bc59795d8600ed858412352e002f29e1a682c6d01ea19d81582b12c96b3b19e00"
+}

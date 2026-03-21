@@ -1,0 +1,10 @@
+{
+  "camera_tool": "raspistill",
+  "resolution": "1920x1080",
+  "quality": 90,
+  "image_file": "capture.jpg",
+  "image_size_bytes": 1223265,
+  "captured_at": "2026-03-21T19:43:37Z",
+  "hostname": "TerraPi",
+  "terrascope_version": "1.0"
+}

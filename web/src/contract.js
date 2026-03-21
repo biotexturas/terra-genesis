@@ -25,6 +25,20 @@ export const registryAbi = [
   },
   {
     type: "function",
+    name: "approvedBinaryHash",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32", internalType: "bytes32" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "approvedScriptHash",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32", internalType: "bytes32" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "isAttester",
     inputs: [{ name: "addr", type: "address", internalType: "address" }],
     outputs: [{ name: "", type: "bool", internalType: "bool" }],
@@ -39,6 +53,25 @@ export const registryAbi = [
     ],
     outputs: [],
     stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "verifyCapture",
+    inputs: [
+      { name: "captureHash", type: "bytes32", internalType: "bytes32" },
+      { name: "v", type: "uint8", internalType: "uint8" },
+      { name: "r", type: "bytes32", internalType: "bytes32" },
+      { name: "s", type: "bytes32", internalType: "bytes32" },
+      { name: "scriptHash", type: "bytes32", internalType: "bytes32" },
+      { name: "binaryHash", type: "bytes32", internalType: "bytes32" },
+    ],
+    outputs: [
+      { name: "valid", type: "bool", internalType: "bool" },
+      { name: "signer", type: "address", internalType: "address" },
+      { name: "scriptMatch", type: "bool", internalType: "bool" },
+      { name: "binaryMatch", type: "bool", internalType: "bool" },
+    ],
+    stateMutability: "view",
   },
   {
     type: "event",
