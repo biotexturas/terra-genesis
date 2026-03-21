@@ -65,7 +65,8 @@ enum Command {
     ///
     /// Reads a reading.json or capture.json file, auto-detects the format,
     /// queries the registry, and prints VERIFIED or UNVERIFIED.
-    /// For captures, checks environment against embedded release hashes by default.
+    /// For captures, checks environment against on-chain approved hashes,
+    /// falling back to embedded release hashes if none are set.
     Verify {
         /// Path to the reading.json or capture.json file
         #[arg(long)]
@@ -73,12 +74,26 @@ enum Command {
         /// Deployed HardTrustRegistry contract address
         #[arg(long)]
         contract: Address,
-        /// Override embedded release hashes with a custom SHA256SUMS file
+        /// Override embedded release hashes with a custom SHA256SUMS file (fallback only)
         #[arg(long)]
         release_hashes: Option<String>,
         /// Skip environment verification entirely
         #[arg(long, default_value_t = false)]
         skip_env_check: bool,
+    },
+    /// Set the approved release hashes on-chain.
+    ///
+    /// Requires HARDTRUST_PRIVATE_KEY (attester key).
+    SetReleaseHashes {
+        /// SHA-256 hash of the official capture script (hex, with or without sha256: prefix)
+        #[arg(long)]
+        script_hash: String,
+        /// SHA-256 hash of the official device binary (hex, with or without sha256: prefix)
+        #[arg(long)]
+        binary_hash: String,
+        /// Deployed HardTrustRegistry contract address
+        #[arg(long)]
+        contract: Address,
     },
 }
 
@@ -154,15 +169,32 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let data: DeviceData = serde_json::from_str(&json)
                 .map_err(|e| format!("invalid JSON (expected reading or capture): {e}"))?;
 
+            let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
+            let registry = HardTrustRegistry::new(contract, &provider);
+
             match &data {
                 DeviceData::Capture(c) => {
-                    // On-chain verification via verifyCapture view function
                     match extract_capture_sig(c) {
                         Ok((prehash, v, r, s)) => {
-                            let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
-                            let registry = HardTrustRegistry::new(contract, &provider);
-                            let result = registry.verifyCapture(prehash, v, r, s).call().await;
-                            match result {
+                            // Parse env hashes for unified call
+                            let script_b32 = if skip_env_check {
+                                FixedBytes::<32>::ZERO
+                            } else {
+                                parse_sha256_to_bytes32(&c.environment.script_hash)
+                                    .unwrap_or(FixedBytes::<32>::ZERO)
+                            };
+                            let binary_b32 = if skip_env_check {
+                                FixedBytes::<32>::ZERO
+                            } else {
+                                parse_sha256_to_bytes32(&c.environment.binary_hash)
+                                    .unwrap_or(FixedBytes::<32>::ZERO)
+                            };
+
+                            let result = registry
+                                .verifyCapture(prehash, v, r, s, script_b32, binary_b32)
+                                .call()
+                                .await;
+                            match &result {
                                 Ok(res) if res.valid => {
                                     println!("VERIFIED (on-chain) — signer: {}", res.signer);
                                 }
@@ -173,6 +205,69 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     println!("UNVERIFIED — invalid signature");
                                 }
                             }
+
+                            // Environment output
+                            if !skip_env_check {
+                                if let Ok(ref res) = result {
+                                    // Check if on-chain hashes are set
+                                    let onchain_script =
+                                        registry.approvedScriptHash().call().await.ok();
+                                    let has_onchain = onchain_script
+                                        .map(|h| h != FixedBytes::<32>::ZERO)
+                                        .unwrap_or(false);
+
+                                    if has_onchain {
+                                        // On-chain env results
+                                        println!("Environment:");
+                                        print_env_result(
+                                            "script_hash",
+                                            &c.environment.script_hash,
+                                            res.scriptMatch,
+                                            "(on-chain)",
+                                        );
+                                        print_env_result(
+                                            "binary_hash",
+                                            &c.environment.binary_hash,
+                                            res.binaryMatch,
+                                            "(on-chain)",
+                                        );
+                                    } else {
+                                        // Fallback to file/embedded hashes
+                                        let hashes_content = if let Some(ref path) = release_hashes
+                                        {
+                                            std::fs::read_to_string(path).map_err(|e| {
+                                                    format!("could not read release hashes file {path}: {e}")
+                                                })?
+                                        } else {
+                                            EMBEDDED_RELEASE_HASHES.to_string()
+                                        };
+
+                                        if hashes_content.trim().is_empty()
+                                            || hashes_content.trim().starts_with('#')
+                                                && hashes_content.lines().count() <= 1
+                                        {
+                                            eprintln!("Warning: no release hashes available, skipping environment check");
+                                        } else {
+                                            let known = parse_hashes_content(&hashes_content);
+                                            println!("Environment:");
+                                            print_env_match_tagged(
+                                                "script_hash",
+                                                &c.environment.script_hash,
+                                                find_hash(&known, "capture.sh"),
+                                                "(embedded)",
+                                            );
+                                            print_env_match_tagged(
+                                                "binary_hash",
+                                                &c.environment.binary_hash,
+                                                find_hash(&known, "device"),
+                                                "(embedded)",
+                                            );
+                                        }
+                                    }
+                                    println!("  hw_serial:    {}", c.environment.hw_serial);
+                                    println!("  camera_info:  {}", c.environment.camera_info);
+                                }
+                            }
                         }
                         Err(reason) => {
                             println!("UNVERIFIED — {reason}");
@@ -180,10 +275,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 DeviceData::Reading(r) => {
-                    // Off-chain verification for readings (unchanged)
                     let reg = prepare_registration(&r.serial);
-                    let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
-                    let registry = HardTrustRegistry::new(contract, &provider);
                     let result = registry
                         .getDevice(reg.serial_hash)
                         .call()
@@ -196,43 +288,37 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             };
+        }
+        Command::SetReleaseHashes {
+            script_hash,
+            binary_hash,
+            contract,
+        } => {
+            let script_bytes = parse_sha256_to_bytes32(&script_hash)?;
+            let binary_bytes = parse_sha256_to_bytes32(&binary_hash)?;
 
-            // Environment verification for captures
-            if let DeviceData::Capture(c) = &data {
-                if !skip_env_check {
-                    let hashes_content = if let Some(ref path) = release_hashes {
-                        std::fs::read_to_string(path).map_err(|e| {
-                            format!("could not read release hashes file {path}: {e}")
-                        })?
-                    } else {
-                        EMBEDDED_RELEASE_HASHES.to_string()
-                    };
+            let private_key_hex = std::env::var("HARDTRUST_PRIVATE_KEY")
+                .map_err(|_| "HARDTRUST_PRIVATE_KEY env var is required.")?;
+            let signer: PrivateKeySigner = private_key_hex.parse().map_err(|_| {
+                "invalid HARDTRUST_PRIVATE_KEY — must be a hex-encoded private key (e.g. 0x...)"
+            })?;
+            let wallet = EthereumWallet::from(signer);
 
-                    if hashes_content.trim().is_empty()
-                        || hashes_content.trim().starts_with('#')
-                            && hashes_content.lines().count() <= 1
-                    {
-                        eprintln!(
-                            "Warning: no release hashes available, skipping environment check"
-                        );
-                    } else {
-                        let known = parse_hashes_content(&hashes_content);
-                        println!("Environment:");
-                        print_env_match(
-                            "script_hash",
-                            &c.environment.script_hash,
-                            find_hash(&known, "capture.sh"),
-                        );
-                        print_env_match(
-                            "binary_hash",
-                            &c.environment.binary_hash,
-                            find_hash(&known, "device"),
-                        );
-                        println!("  hw_serial:    {}", c.environment.hw_serial);
-                        println!("  camera_info:  {}", c.environment.camera_info);
-                    }
-                }
-            }
+            let provider = ProviderBuilder::new()
+                .wallet(wallet)
+                .connect_http(env_rpc_url()?);
+
+            let registry = HardTrustRegistry::new(contract, &provider);
+            let tx = registry
+                .setApprovedHashes(script_bytes, binary_bytes)
+                .send()
+                .await
+                .map_err(|e| format!("setApprovedHashes failed: {e}"))?
+                .watch()
+                .await
+                .map_err(|e| format!("setApprovedHashes tx failed: {e}"))?;
+
+            println!("Set approved hashes. tx: {tx}");
         }
     }
     Ok(())
@@ -286,19 +372,39 @@ fn find_hash<'a>(entries: &'a [(String, String)], needle: &str) -> Option<&'a st
         .map(|(hash, _)| hash.as_str())
 }
 
-/// Print a MATCH/MISMATCH line for an environment field.
-fn print_env_match(field: &str, actual: &str, expected: Option<&str>) {
+/// Print a MATCH/MISMATCH line for an environment field with a source tag.
+fn print_env_match_tagged(field: &str, actual: &str, expected: Option<&str>, tag: &str) {
     match expected {
         Some(exp) if exp == actual => {
-            println!("  {field}:  {actual} → MATCH");
+            println!("  {field}:  {actual} → MATCH {tag}");
         }
         Some(exp) => {
-            println!("  {field}:  {actual} → MISMATCH (expected {exp})");
+            println!("  {field}:  {actual} → MISMATCH {tag} (expected {exp})");
         }
         None => {
             println!("  {field}:  {actual} (no reference hash)");
         }
     }
+}
+
+/// Print MATCH/MISMATCH from on-chain bool result.
+fn print_env_result(field: &str, actual: &str, matched: bool, tag: &str) {
+    if matched {
+        println!("  {field}:  {actual} → MATCH {tag}");
+    } else {
+        println!("  {field}:  {actual} → MISMATCH {tag}");
+    }
+}
+
+/// Parse a SHA-256 hash string to FixedBytes<32>.
+/// Accepts "sha256:hex" or plain hex.
+fn parse_sha256_to_bytes32(input: &str) -> Result<FixedBytes<32>, Box<dyn std::error::Error>> {
+    let hex_str = input.strip_prefix("sha256:").unwrap_or(input);
+    let bytes = hex::decode(hex_str).map_err(|_| format!("invalid hex in hash: {input}"))?;
+    if bytes.len() != 32 {
+        return Err(format!("hash must be 32 bytes, got {}: {input}", bytes.len()).into());
+    }
+    Ok(FixedBytes::<32>::from_slice(&bytes))
 }
 
 #[cfg(test)]
