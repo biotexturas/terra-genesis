@@ -9,6 +9,13 @@ use attester::{
 use clap::{Parser, Subcommand};
 use hardtrust_protocol::{Capture, Reading};
 
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum DeviceData {
+    Capture(Capture),
+    Reading(Reading),
+}
+
 sol!(
     #[sol(rpc)]
     HardTrustRegistry,
@@ -121,33 +128,32 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let json = std::fs::read_to_string(&file)
                 .map_err(|e| format!("could not read file {file}: {e}"))?;
 
-            // Auto-detect format: Capture has "content_hash", Reading has "temperature"
-            let (serial, verification) = if json.contains("content_hash") {
-                let capture: Capture = serde_json::from_str(&json)
-                    .map_err(|e| format!("invalid capture JSON: {e}"))?;
-                let reg = prepare_registration(&capture.serial);
-                let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
-                let registry = HardTrustRegistry::new(contract, &provider);
-                let result = registry
-                    .getDevice(reg.serial_hash)
-                    .call()
-                    .await
-                    .map_err(|e| format!("contract query failed: {e}"))?;
-                let serial = capture.serial.clone();
-                (serial, verify_device_data(&capture, result.deviceAddr))
-            } else {
-                let reading: Reading = serde_json::from_str(&json)
-                    .map_err(|e| format!("invalid reading JSON: {e}"))?;
-                let reg = prepare_registration(&reading.serial);
-                let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
-                let registry = HardTrustRegistry::new(contract, &provider);
-                let result = registry
-                    .getDevice(reg.serial_hash)
-                    .call()
-                    .await
-                    .map_err(|e| format!("contract query failed: {e}"))?;
-                let serial = reading.serial.clone();
-                (serial, verify_device_data(&reading, result.deviceAddr))
+            let data: DeviceData = serde_json::from_str(&json)
+                .map_err(|e| format!("invalid JSON (expected reading or capture): {e}"))?;
+
+            let (serial, verification) = match &data {
+                DeviceData::Capture(c) => {
+                    let reg = prepare_registration(&c.serial);
+                    let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
+                    let registry = HardTrustRegistry::new(contract, &provider);
+                    let result = registry
+                        .getDevice(reg.serial_hash)
+                        .call()
+                        .await
+                        .map_err(|e| format!("contract query failed: {e}"))?;
+                    (c.serial.clone(), verify_device_data(c, result.deviceAddr))
+                }
+                DeviceData::Reading(r) => {
+                    let reg = prepare_registration(&r.serial);
+                    let provider = ProviderBuilder::new().connect_http(env_rpc_url()?);
+                    let registry = HardTrustRegistry::new(contract, &provider);
+                    let result = registry
+                        .getDevice(reg.serial_hash)
+                        .call()
+                        .await
+                        .map_err(|e| format!("contract query failed: {e}"))?;
+                    (r.serial.clone(), verify_device_data(r, result.deviceAddr))
+                }
             };
 
             let _ = serial; // used in future logging
@@ -314,8 +320,8 @@ mod tests {
             "expected 'Error:' on stderr, got: {stderr}"
         );
         assert!(
-            stderr.contains("missing field"),
-            "expected 'missing field' on stderr, got: {stderr}"
+            stderr.contains("missing field") || stderr.contains("did not match any variant"),
+            "expected parse error on stderr, got: {stderr}"
         );
         assert!(!stderr.contains("panic"), "should not panic, got: {stderr}");
     }
@@ -422,8 +428,8 @@ mod tests {
             "expected 'Error:' on stderr, got: {stderr}"
         );
         assert!(
-            stderr.contains("missing field"),
-            "expected 'missing field' on stderr, got: {stderr}"
+            stderr.contains("missing field") || stderr.contains("did not match any variant"),
+            "expected parse error on stderr, got: {stderr}"
         );
     }
 }

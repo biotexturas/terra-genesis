@@ -99,6 +99,26 @@ What it does:
 
 ---
 
+## Capture — Microscopy Data Provenance
+
+TerraGenesis extends the walking skeleton with microscopy image capture:
+
+```bash
+# On a TerraScope RPi with camera installed:
+device capture --output-dir ./output/
+
+# Verify the capture:
+attester verify --file capture.json --contract <address>
+```
+
+What happens:
+1. `device capture` calls the TerraScope capture script (`/usr/local/lib/terrascope/capture.sh`)
+2. The script takes a photo and generates metadata
+3. Device hashes all files, signs the content hash, writes `capture.json`
+4. `attester verify` checks the signature against the on-chain registry
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -156,7 +176,7 @@ This infrastructure connects real ecological observations with digital worlds an
 During this hackathon we aim to prototype:
 
 - [ ] Device identity and signing (via HardTrust)
-- [ ] Hashing and data capture pipeline
+- [x] Hashing and data capture pipeline
 - [ ] Minimal on-chain proof of data provenance
 - [ ] Simple verification workflow
 
@@ -179,6 +199,7 @@ terra-genesis/
 ├── device/             # Rust binary — device CLI
 ├── attester/           # Rust binary — attester CLI
 ├── protocol/           # Rust library — shared protocol (Reading, crypto, errors)
+├── terrascope/         # TerraScope hardware adapter (capture script)
 ├── scripts/            # Shell scripts (build, e2e, version check)
 ├── docs/
 │   ├── proposal.md     # TerraGenesis hackathon proposal

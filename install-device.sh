@@ -90,6 +90,10 @@ main() {
   local capture_dir="/usr/local/lib/terrascope"
   echo "Installing capture script to ${capture_dir}/capture.sh ..."
   curl -fsSL "${capture_url}" -o "${TMP_DIR}/capture.sh"
+  echo "Verifying capture script checksum..."
+  local capture_expected
+  capture_expected=$(curl -fsSL "${base_url}/terrascope-capture.sh.sha256" | awk '{print $1}')
+  verify_checksum "${TMP_DIR}/capture.sh" "${capture_expected}"
   if [ -w "$(dirname "${capture_dir}")" ]; then
     mkdir -p "${capture_dir}"
     cp "${TMP_DIR}/capture.sh" "${capture_dir}/capture.sh"
