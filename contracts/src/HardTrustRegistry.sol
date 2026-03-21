@@ -49,4 +49,8 @@ contract HardTrustRegistry {
     function isAttester(address addr) external view returns (bool) {
         return addr == ATTESTER;
     }
+
+    function isDeviceRegistered(bytes32 serialHash) external view returns (bool) {
+        return devices[serialHash].active;
+    }
 }
