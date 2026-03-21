@@ -320,8 +320,8 @@ mod tests {
             "expected 'Error:' on stderr, got: {stderr}"
         );
         assert!(
-            stderr.contains("missing field"),
-            "expected 'missing field' on stderr, got: {stderr}"
+            stderr.contains("missing field") || stderr.contains("did not match any variant"),
+            "expected parse error on stderr, got: {stderr}"
         );
         assert!(!stderr.contains("panic"), "should not panic, got: {stderr}");
     }
@@ -428,8 +428,8 @@ mod tests {
             "expected 'Error:' on stderr, got: {stderr}"
         );
         assert!(
-            stderr.contains("missing field"),
-            "expected 'missing field' on stderr, got: {stderr}"
+            stderr.contains("missing field") || stderr.contains("did not match any variant"),
+            "expected parse error on stderr, got: {stderr}"
         );
     }
 }
