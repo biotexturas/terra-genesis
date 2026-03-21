@@ -1,4 +1,4 @@
-# Device Setup — HardTrust v0.1.0
+# Device Setup — TerraGenesis v0.1.0
 
 The `device` binary runs on a Raspberry Pi and is responsible for generating the device's
 cryptographic identity and emitting signed temperature readings.
@@ -19,7 +19,7 @@ No blockchain access or Ethereum node is required — the device binary works fu
 ## Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/elmol/hardtrust/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/biotexturas/terra-genesis/main/install-device.sh | bash
 ```
 
 Verify:
