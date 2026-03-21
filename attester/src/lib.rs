@@ -92,7 +92,9 @@ pub fn classify_registration_error(error: &str, serial_hash: &str) -> Registrati
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hardtrust_protocol::{public_key_to_address, sign, sign_reading, Capture, CaptureFile};
+    use hardtrust_protocol::{
+        public_key_to_address, sign, sign_reading, Capture, CaptureEnvironment, CaptureFile,
+    };
     use k256::ecdsa::SigningKey;
 
     fn test_signing_key() -> SigningKey {
@@ -190,6 +192,12 @@ mod tests {
                     .to_string(),
                 size: 1024,
             }],
+            environment: CaptureEnvironment {
+                script_hash: "sha256:aaa111".to_string(),
+                binary_hash: "sha256:bbb222".to_string(),
+                hw_serial: "TEST-HW-001".to_string(),
+                camera_info: "mock-camera".to_string(),
+            },
             signature: String::new(),
         };
         capture.signature = sign(&key, &capture).expect("valid capture");
