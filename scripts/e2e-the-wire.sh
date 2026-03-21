@@ -74,8 +74,61 @@ if [[ "$UNVERIFIED_OUTPUT" == *"VERIFIED"* && "$UNVERIFIED_OUTPUT" != *"UNVERIFI
 fi
 echo "Case 2: UNVERIFIED — OK"
 
+# === CASE 3: VERIFIED capture (registered device) ===
+echo ""
+echo "=== Case 3: Capture VERIFIED ==="
+
+# Clean any previous capture output
+rm -rf capture-output capture.json
+
+cargo run --bin device -- capture \
+  --cmd "./scripts/mock-capture.sh" \
+  --output-dir ./capture-output
+
+echo "Capture written"
+
+VERIFY_CAPTURE=$(cargo run --bin attester -- verify \
+  --file capture.json \
+  --contract "$CONTRACT_ADDRESS")
+echo "$VERIFY_CAPTURE"
+
+if [[ "$VERIFY_CAPTURE" != *"VERIFIED"* ]]; then
+    echo "The Wire gate: FAILED — expected VERIFIED for capture from registered device"
+    exit 1
+fi
+echo "Case 3: Capture VERIFIED — OK"
+
+# === CASE 4: UNVERIFIED capture (fake capture) ===
+echo ""
+echo "=== Case 4: Capture UNVERIFIED ==="
+
+cat > fake-capture.json <<'FAKEJSON'
+{
+  "serial": "FAKE-SCOPE-999",
+  "address": "0x0000000000000000000000000000000000000BAD",
+  "timestamp": "2025-01-01T00:00:00Z",
+  "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "files": [
+    { "name": "fake.jpg", "hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "size": 100 }
+  ],
+  "signature": "0xFAKESIG"
+}
+FAKEJSON
+
+UNVERIFIED_CAPTURE=$(cargo run --bin attester -- verify \
+  --file fake-capture.json \
+  --contract "$CONTRACT_ADDRESS")
+echo "$UNVERIFIED_CAPTURE"
+
+if [[ "$UNVERIFIED_CAPTURE" == *"VERIFIED"* && "$UNVERIFIED_CAPTURE" != *"UNVERIFIED"* ]]; then
+    echo "The Wire gate: FAILED — expected UNVERIFIED for fake capture"
+    exit 1
+fi
+echo "Case 4: Capture UNVERIFIED — OK"
+
 # Cleanup
-rm -f fake-reading.json
+rm -f fake-reading.json fake-capture.json capture.json reading.json
+rm -rf capture-output
 
 echo ""
-echo "The Wire gate: PASSED"
+echo "The Wire gate: PASSED (4 cases — reading verified/unverified + capture verified/unverified)"
