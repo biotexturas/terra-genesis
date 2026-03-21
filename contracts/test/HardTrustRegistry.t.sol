@@ -217,8 +217,8 @@ contract HardTrustRegistryTest is Test {
 
     function testFuzz_verifyCapture_random_keys(uint256 pk, bytes32 captureHash) public {
         // Bound pk to valid range (1 to secp256k1_N - 1)
-        uint256 secp256k1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
-        pk = bound(pk, 1, secp256k1_N - 1);
+        uint256 secp256k1N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
+        pk = bound(pk, 1, secp256k1N - 1);
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, captureHash);
         address signer = vm.addr(pk);
@@ -227,5 +227,86 @@ contract HardTrustRegistryTest is Test {
         (bool valid, address recovered) = registry.verifyCapture(captureHash, v, r, s);
         assertFalse(valid);
         assertEq(recovered, signer);
+    }
+
+    // --- setApprovedHashes tests ---
+
+    bytes32 constant SCRIPT_HASH = bytes32(uint256(0xAABB));
+    bytes32 constant BINARY_HASH = bytes32(uint256(0xCCDD));
+
+    function test_setApprovedHashes_by_attester() public {
+        vm.prank(attesterAddr);
+        vm.expectEmit(false, false, false, true);
+        emit HardTrustRegistry.EnvironmentHashesUpdated(SCRIPT_HASH, BINARY_HASH);
+        registry.setApprovedHashes(SCRIPT_HASH, BINARY_HASH);
+
+        assertEq(registry.approvedScriptHash(), SCRIPT_HASH);
+        assertEq(registry.approvedBinaryHash(), BINARY_HASH);
+    }
+
+    function test_setApprovedHashes_by_non_attester_reverts() public {
+        vm.prank(randomAddr);
+        vm.expectRevert(HardTrustRegistry.NotAttester.selector);
+        registry.setApprovedHashes(SCRIPT_HASH, BINARY_HASH);
+    }
+
+    // --- verifyEnvironment tests ---
+
+    function test_verifyEnvironment_match() public {
+        vm.prank(attesterAddr);
+        registry.setApprovedHashes(SCRIPT_HASH, BINARY_HASH);
+
+        (bool scriptMatch, bool binaryMatch) = registry.verifyEnvironment(SCRIPT_HASH, BINARY_HASH);
+        assertTrue(scriptMatch);
+        assertTrue(binaryMatch);
+    }
+
+    function test_verifyEnvironment_script_mismatch() public {
+        vm.prank(attesterAddr);
+        registry.setApprovedHashes(SCRIPT_HASH, BINARY_HASH);
+
+        (bool scriptMatch, bool binaryMatch) = registry.verifyEnvironment(bytes32(uint256(0x1111)), BINARY_HASH);
+        assertFalse(scriptMatch);
+        assertTrue(binaryMatch);
+    }
+
+    function test_verifyEnvironment_binary_mismatch() public {
+        vm.prank(attesterAddr);
+        registry.setApprovedHashes(SCRIPT_HASH, BINARY_HASH);
+
+        (bool scriptMatch, bool binaryMatch) = registry.verifyEnvironment(SCRIPT_HASH, bytes32(uint256(0x2222)));
+        assertTrue(scriptMatch);
+        assertFalse(binaryMatch);
+    }
+
+    function test_verifyEnvironment_no_hashes_set() public view {
+        (bool scriptMatch, bool binaryMatch) = registry.verifyEnvironment(SCRIPT_HASH, BINARY_HASH);
+        assertFalse(scriptMatch);
+        assertFalse(binaryMatch);
+    }
+
+    function test_verifyEnvironment_after_update() public {
+        vm.prank(attesterAddr);
+        registry.setApprovedHashes(SCRIPT_HASH, BINARY_HASH);
+
+        (bool sm1, bool bm1) = registry.verifyEnvironment(SCRIPT_HASH, BINARY_HASH);
+        assertTrue(sm1);
+        assertTrue(bm1);
+
+        // Update to new hashes
+        bytes32 newScript = bytes32(uint256(0xEEFF));
+        bytes32 newBinary = bytes32(uint256(0x1122));
+        vm.prank(attesterAddr);
+        registry.setApprovedHashes(newScript, newBinary);
+
+        // Old hashes no longer match
+        (bool sm2, bool bm2) = registry.verifyEnvironment(SCRIPT_HASH, BINARY_HASH);
+        assertFalse(sm2);
+        assertFalse(bm2);
+
+        // New hashes match
+        (bool sm3, bool bm3) = registry.verifyEnvironment(newScript, newBinary);
+        assertTrue(sm3);
+        assertTrue(bm3);
     }
 }

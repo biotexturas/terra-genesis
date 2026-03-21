@@ -17,11 +17,15 @@ contract HardTrustRegistry {
     error DeviceAlreadyRegistered(bytes32 serialHash);
 
     event DeviceRegistered(bytes32 indexed serialHash, address indexed deviceAddr, address indexed attester);
+    event EnvironmentHashesUpdated(bytes32 scriptHash, bytes32 binaryHash);
 
     address public immutable ATTESTER;
 
     mapping(bytes32 => Device) private devices;
     mapping(address => bool) public registeredDevices;
+
+    bytes32 public approvedScriptHash;
+    bytes32 public approvedBinaryHash;
 
     constructor(address _attester) {
         ATTESTER = _attester;
@@ -52,6 +56,30 @@ contract HardTrustRegistry {
     /// @notice Check whether an address is the authorized attester.
     function isAttester(address addr) external view returns (bool) {
         return addr == ATTESTER;
+    }
+
+    /// @notice Update the approved environment hashes for the current release.
+    /// @param scriptHash SHA-256 of the official capture script (as bytes32).
+    /// @param binaryHash SHA-256 of the official device binary (as bytes32).
+    function setApprovedHashes(bytes32 scriptHash, bytes32 binaryHash) external {
+        if (msg.sender != ATTESTER) revert NotAttester();
+        approvedScriptHash = scriptHash;
+        approvedBinaryHash = binaryHash;
+        emit EnvironmentHashesUpdated(scriptHash, binaryHash);
+    }
+
+    /// @notice Check if environment hashes match the approved release.
+    /// @param scriptHash The script_hash from capture environment.
+    /// @param binaryHash The binary_hash from capture environment.
+    /// @return scriptMatch True if script hash matches approved.
+    /// @return binaryMatch True if binary hash matches approved.
+    function verifyEnvironment(bytes32 scriptHash, bytes32 binaryHash)
+        external
+        view
+        returns (bool scriptMatch, bool binaryMatch)
+    {
+        scriptMatch = (scriptHash == approvedScriptHash);
+        binaryMatch = (binaryHash == approvedBinaryHash);
     }
 
     /// @notice Verify a device-signed capture on-chain. Free to call (view).
