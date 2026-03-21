@@ -132,33 +132,38 @@ if [[ "$UNVERIFIED_CAPTURE" == *"VERIFIED"* && "$UNVERIFIED_CAPTURE" != *"UNVERI
 fi
 echo "Case 4: Capture UNVERIFIED — OK"
 
-# === CASE 5: Environment MATCH with --release-hashes ===
+# === Set approved release hashes on-chain ===
 echo ""
-echo "=== Case 5: Environment MATCH ==="
+echo "=== Setting approved release hashes on-chain ==="
 
-# Build SHA256SUMS from the actual capture
-SCRIPT_HASH=$(sha256sum ./scripts/mock-capture.sh | awk '{print "sha256:" $1}')
-BINARY_HASH=$(jq -r '.environment.binary_hash' capture.json)
-cat > SHA256SUMS <<EOF
-${SCRIPT_HASH}  terrascope-capture.sh
-${BINARY_HASH}  device-armv7
-EOF
+SCRIPT_SHA256=$(sha256sum ./scripts/mock-capture.sh | awk '{print $1}')
+BINARY_SHA256_RAW=$(jq -r '.environment.binary_hash' capture.json | sed 's/^sha256://')
+
+cargo run --bin attester -- set-release-hashes \
+  --script-hash "$SCRIPT_SHA256" \
+  --binary-hash "$BINARY_SHA256_RAW" \
+  --contract "$CONTRACT_ADDRESS"
+
+echo "Approved hashes set on-chain"
+
+# === CASE 5: Environment MATCH (on-chain) ===
+echo ""
+echo "=== Case 5: Environment MATCH (on-chain) ==="
 
 VERIFY_ENV=$(cargo run --bin attester -- verify \
   --file capture.json \
-  --contract "$CONTRACT_ADDRESS" \
-  --release-hashes SHA256SUMS)
+  --contract "$CONTRACT_ADDRESS")
 echo "$VERIFY_ENV"
 
-if [[ "$VERIFY_ENV" != *"MATCH"* ]]; then
-    echo "The Wire gate: FAILED — expected MATCH for environment hashes"
+if [[ "$VERIFY_ENV" != *"MATCH (on-chain)"* ]]; then
+    echo "The Wire gate: FAILED — expected MATCH (on-chain) for environment hashes"
     exit 1
 fi
-echo "Case 5: Environment MATCH — OK"
+echo "Case 5: Environment MATCH (on-chain) — OK"
 
-# === CASE 6: Environment MISMATCH (tampered script) ===
+# === CASE 6: Environment MISMATCH (on-chain, tampered script) ===
 echo ""
-echo "=== Case 6: Environment MISMATCH ==="
+echo "=== Case 6: Environment MISMATCH (on-chain) ==="
 
 # Create a tampered capture script
 cp ./scripts/mock-capture.sh /tmp/tampered-capture.sh
@@ -172,22 +177,21 @@ cargo run --bin device -- capture \
 
 VERIFY_TAMPERED=$(cargo run --bin attester -- verify \
   --file capture.json \
-  --contract "$CONTRACT_ADDRESS" \
-  --release-hashes SHA256SUMS)
+  --contract "$CONTRACT_ADDRESS")
 echo "$VERIFY_TAMPERED"
 
 if [[ "$VERIFY_TAMPERED" != *"VERIFIED"* ]]; then
     echo "The Wire gate: FAILED — tampered capture should still have VERIFIED signature"
     exit 1
 fi
-if [[ "$VERIFY_TAMPERED" != *"MISMATCH"* ]]; then
-    echo "The Wire gate: FAILED — expected MISMATCH for tampered script hash"
+if [[ "$VERIFY_TAMPERED" != *"MISMATCH (on-chain)"* ]]; then
+    echo "The Wire gate: FAILED — expected MISMATCH (on-chain) for tampered script hash"
     exit 1
 fi
-echo "Case 6: Environment MISMATCH (signature still VERIFIED) — OK"
+echo "Case 6: Environment MISMATCH (on-chain, signature still VERIFIED) — OK"
 
 # Cleanup
-rm -f fake-reading.json fake-capture.json capture.json reading.json SHA256SUMS
+rm -f fake-reading.json fake-capture.json capture.json reading.json
 rm -rf capture-output
 rm -f /tmp/tampered-capture.sh
 

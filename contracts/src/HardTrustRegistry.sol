@@ -17,11 +17,15 @@ contract HardTrustRegistry {
     error DeviceAlreadyRegistered(bytes32 serialHash);
 
     event DeviceRegistered(bytes32 indexed serialHash, address indexed deviceAddr, address indexed attester);
+    event EnvironmentHashesUpdated(bytes32 scriptHash, bytes32 binaryHash);
 
     address public immutable ATTESTER;
 
     mapping(bytes32 => Device) private devices;
     mapping(address => bool) public registeredDevices;
+
+    bytes32 public approvedScriptHash;
+    bytes32 public approvedBinaryHash;
 
     constructor(address _attester) {
         ATTESTER = _attester;
@@ -54,19 +58,40 @@ contract HardTrustRegistry {
         return addr == ATTESTER;
     }
 
-    /// @notice Verify a device-signed capture on-chain. Free to call (view).
+    /// @notice Update the approved environment hashes for the current release.
+    /// @param scriptHash SHA-256 of the official capture script (as bytes32).
+    /// @param binaryHash SHA-256 of the official device binary (as bytes32).
+    function setApprovedHashes(bytes32 scriptHash, bytes32 binaryHash) external {
+        if (msg.sender != ATTESTER) revert NotAttester();
+        approvedScriptHash = scriptHash;
+        approvedBinaryHash = binaryHash;
+        emit EnvironmentHashesUpdated(scriptHash, binaryHash);
+    }
+
+    /// @notice Verify a device-signed capture on-chain: signature + device registration + environment.
     /// @param captureHash The keccak256 prehash that the device signed.
     /// @param v Signature recovery id (27 or 28).
     /// @param r Signature r component.
     /// @param s Signature s component.
+    /// @param scriptHash SHA-256 of the capture script (bytes32). Pass bytes32(0) to skip env check.
+    /// @param binaryHash SHA-256 of the device binary (bytes32). Pass bytes32(0) to skip env check.
     /// @return valid True if signer is a registered device.
     /// @return signer The recovered address.
-    function verifyCapture(bytes32 captureHash, uint8 v, bytes32 r, bytes32 s)
+    /// @return scriptMatch True if scriptHash matches approved (false if skipped or no approved hash set).
+    /// @return binaryMatch True if binaryHash matches approved (false if skipped or no approved hash set).
+    function verifyCapture(bytes32 captureHash, uint8 v, bytes32 r, bytes32 s, bytes32 scriptHash, bytes32 binaryHash)
         external
         view
-        returns (bool valid, address signer)
+        returns (bool valid, address signer, bool scriptMatch, bool binaryMatch)
     {
         signer = ECDSA.recover(captureHash, v, r, s);
         valid = registeredDevices[signer];
+
+        if (scriptHash != bytes32(0) && approvedScriptHash != bytes32(0)) {
+            scriptMatch = (scriptHash == approvedScriptHash);
+        }
+        if (binaryHash != bytes32(0) && approvedBinaryHash != bytes32(0)) {
+            binaryMatch = (binaryHash == approvedBinaryHash);
+        }
     }
 }
