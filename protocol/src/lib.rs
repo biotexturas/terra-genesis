@@ -367,4 +367,34 @@ mod tests {
         let result = sign(&key, &capture);
         assert!(matches!(result, Err(ProtocolError::InvalidPayload)));
     }
+
+    /// Shared test vector — the prehash MUST match the Foundry test.
+    /// If this test changes, update the Solidity test too.
+    #[test]
+    fn shared_test_vector_capture_prehash() {
+        let capture = Capture {
+            serial: "TERRASCOPE-TEST-001".to_string(),
+            address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266".to_string(),
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
+            content_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+                .to_string(),
+            files: vec![],
+            environment: CaptureEnvironment {
+                script_hash: "sha256:aaaa".to_string(),
+                binary_hash: "sha256:bbbb".to_string(),
+                hw_serial: "TEST-HW".to_string(),
+                camera_info: "mock".to_string(),
+            },
+            signature: "0x".to_string(),
+        };
+        let hash = capture.prehash().expect("valid prehash");
+        // Print for use in Foundry test
+        eprintln!("shared_test_vector prehash: 0x{}", hex::encode(hash));
+        // This value must match the Foundry test constant
+        // This constant MUST match SHARED_PREHASH in HardTrustRegistry.t.sol
+        assert_eq!(
+            hex::encode(hash),
+            "0725f13a17d9bebdeca12211b44e120a1355ee9e23371c6addce2874b94a0528"
+        );
+    }
 }

@@ -14,10 +14,19 @@ contract HardTrustRegistryTest is Test {
     bytes32 serialHash = keccak256("TEST-SERIAL-001");
     address deviceAddr = address(0xDEAD);
 
+    // Anvil account #0 private key (well-known test key)
+    uint256 constant DEVICE_PK = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+    address constant DEVICE_ADDR = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+
+    // Shared test vector — MUST match protocol/src/lib.rs shared_test_vector_capture_prehash
+    bytes32 constant SHARED_PREHASH = 0x0725f13a17d9bebdeca12211b44e120a1355ee9e23371c6addce2874b94a0528;
+
     function setUp() public {
         vm.prank(deployer);
         registry = new HardTrustRegistry(attesterAddr);
     }
+
+    // --- Existing registration tests ---
 
     function test_attesterCanRegisterDevice() public {
         vm.prank(attesterAddr);
@@ -112,5 +121,111 @@ contract HardTrustRegistryTest is Test {
         assertEq(d2, device2);
         assertTrue(a1);
         assertTrue(a2);
+    }
+
+    // --- registeredDevices mapping tests ---
+
+    function test_registeredDevices_populated_on_register() public {
+        assertFalse(registry.registeredDevices(deviceAddr));
+        vm.prank(attesterAddr);
+        registry.registerDevice(serialHash, deviceAddr);
+        assertTrue(registry.registeredDevices(deviceAddr));
+    }
+
+    function test_registeredDevices_false_for_unregistered() public view {
+        assertFalse(registry.registeredDevices(address(0x999)));
+    }
+
+    // --- verifyCapture tests ---
+
+    function test_verifyCapture_valid_registered_device() public {
+        // Register the device
+        vm.prank(attesterAddr);
+        registry.registerDevice(keccak256("TEST-SERIAL"), DEVICE_ADDR);
+
+        // Sign a hash
+        bytes32 captureHash = keccak256("test capture data");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEVICE_PK, captureHash);
+
+        (bool valid, address signer) = registry.verifyCapture(captureHash, v, r, s);
+        assertTrue(valid);
+        assertEq(signer, DEVICE_ADDR);
+    }
+
+    function test_verifyCapture_unregistered_device() public {
+        // Sign with a known key but don't register the device
+        bytes32 captureHash = keccak256("test capture data");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEVICE_PK, captureHash);
+
+        (bool valid, address signer) = registry.verifyCapture(captureHash, v, r, s);
+        assertFalse(valid);
+        assertEq(signer, DEVICE_ADDR);
+    }
+
+    function test_verifyCapture_invalid_signature_reverts() public {
+        bytes32 captureHash = keccak256("test");
+        // Garbage v/r/s — OZ ECDSA should revert
+        vm.expectRevert();
+        registry.verifyCapture(captureHash, 99, bytes32(uint256(1)), bytes32(uint256(2)));
+    }
+
+    function test_verifyCapture_tampered_hash() public {
+        vm.prank(attesterAddr);
+        registry.registerDevice(keccak256("TEST-SERIAL"), DEVICE_ADDR);
+
+        bytes32 originalHash = keccak256("original");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEVICE_PK, originalHash);
+
+        // Verify with a different hash — should recover wrong address
+        bytes32 tamperedHash = keccak256("tampered");
+        (bool valid, address signer) = registry.verifyCapture(tamperedHash, v, r, s);
+        assertFalse(valid);
+        assertNotEq(signer, DEVICE_ADDR);
+    }
+
+    function test_verifyCapture_s_malleability_rejected() public {
+        bytes32 captureHash = keccak256("test");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEVICE_PK, captureHash);
+
+        // Flip s to high-s (s' = secp256k1_N - s)
+        uint256 secp256k1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
+        bytes32 flippedS = bytes32(secp256k1_N - uint256(s));
+        uint8 flippedV = v == 27 ? 28 : 27;
+
+        // OZ ECDSA rejects high-s values
+        vm.expectRevert();
+        registry.verifyCapture(captureHash, flippedV, r, flippedS);
+    }
+
+    // --- Shared test vector ---
+
+    function test_shared_test_vector() public {
+        // Register the Anvil account #0 as a device
+        vm.prank(attesterAddr);
+        registry.registerDevice(keccak256("TERRASCOPE-TEST-001"), DEVICE_ADDR);
+
+        // Sign the shared prehash with the known key
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(DEVICE_PK, SHARED_PREHASH);
+
+        // Verify on-chain
+        (bool valid, address signer) = registry.verifyCapture(SHARED_PREHASH, v, r, s);
+        assertTrue(valid, "shared test vector should verify");
+        assertEq(signer, DEVICE_ADDR, "signer should be Anvil account #0");
+    }
+
+    // --- Fuzz test ---
+
+    function testFuzz_verifyCapture_random_keys(uint256 pk, bytes32 captureHash) public {
+        // Bound pk to valid range (1 to secp256k1_N - 1)
+        uint256 secp256k1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
+        pk = bound(pk, 1, secp256k1_N - 1);
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, captureHash);
+        address signer = vm.addr(pk);
+
+        // Unregistered signer — should return (false, signer)
+        (bool valid, address recovered) = registry.verifyCapture(captureHash, v, r, s);
+        assertFalse(valid);
+        assertEq(recovered, signer);
     }
 }
