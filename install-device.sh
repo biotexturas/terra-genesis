@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# install-device.sh — Install HardTrust `device` on Raspberry Pi (ARMv7 only).
+# install-device.sh — Install TerraGenesis `device` on Raspberry Pi (ARMv7 only).
 # For Ubuntu/macOS use install-attester.sh instead.
 #
-# Env: HARDTRUST_VERSION (default: latest), INSTALL_DIR (default: /usr/local/bin)
+# Env: TERRAGENESIS_VERSION (default: latest), INSTALL_DIR (default: /usr/local/bin)
 
 set -euo pipefail
-REPO="elmol/hardtrust"
+REPO="biotexturas/terra-genesis"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 BINARY="device"
 TARGET="armv7-unknown-linux-musleabihf"
@@ -32,7 +32,7 @@ guard_platform() {
 }
 
 resolve_version() {
-  [ -n "${HARDTRUST_VERSION:-}" ] && { echo "${HARDTRUST_VERSION}"; return; }
+  [ -n "${TERRAGENESIS_VERSION:-}" ] && { echo "${TERRAGENESIS_VERSION}"; return; }
 
   local v
   # Use /releases (not /releases/latest) so pre-releases are included
@@ -43,7 +43,7 @@ resolve_version() {
 
   [ -n "${v}" ] || {
     echo "ERROR: Could not resolve latest release." >&2
-    echo "       Set HARDTRUST_VERSION=v0.1.0-rc8 or check https://github.com/${REPO}/releases" >&2
+    echo "       Set TERRAGENESIS_VERSION=v0.1.0-rc8 or check https://github.com/${REPO}/releases" >&2
     exit 1
   }
   echo "${v}"
@@ -64,8 +64,8 @@ verify_checksum() {
 }
 
 main() {
-  echo "HardTrust Device Installer (Raspberry Pi ARMv7)"
-  echo "================================================"
+  echo "TerraGenesis Device Installer (Raspberry Pi ARMv7)"
+  echo "==================================================="
   guard_platform
   local version artifact base_url
   version="$(resolve_version)"

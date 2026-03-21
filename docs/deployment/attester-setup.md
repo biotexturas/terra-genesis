@@ -1,4 +1,4 @@
-# Attester Setup — HardTrust v0.1.0
+# Attester Setup — TerraGenesis v0.1.0
 
 The `attester` binary registers devices on-chain and verifies signed readings. It requires
 an Ethereum wallet key and access to a JSON-RPC endpoint.
@@ -31,7 +31,7 @@ forge --version
 ## Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/elmol/hardtrust/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/biotexturas/terra-genesis/main/install-attester.sh | bash
 ```
 
 Verify:
