@@ -54,6 +54,7 @@ enum Command {
     ///
     /// Reads a reading.json or capture.json file, auto-detects the format,
     /// queries the registry, and prints VERIFIED or UNVERIFIED.
+    /// For captures, prints environment info and optionally checks against known-good hashes.
     Verify {
         /// Path to the reading.json or capture.json file
         #[arg(long)]
@@ -61,6 +62,9 @@ enum Command {
         /// Deployed HardTrustRegistry contract address
         #[arg(long)]
         contract: Address,
+        /// Path to SHA256SUMS file with known-good hashes for environment verification
+        #[arg(long)]
+        release_hashes: Option<String>,
     },
 }
 
@@ -124,7 +128,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("Registered device. tx: {tx}");
         }
-        Command::Verify { file, contract } => {
+        Command::Verify {
+            file,
+            contract,
+            release_hashes,
+        } => {
             let json = std::fs::read_to_string(&file)
                 .map_err(|e| format!("could not read file {file}: {e}"))?;
 
@@ -161,9 +169,73 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 VerificationResult::Verified => println!("VERIFIED"),
                 VerificationResult::Unverified(_) => println!("UNVERIFIED"),
             }
+
+            // Print environment info for captures
+            if let DeviceData::Capture(c) = &data {
+                println!("Environment:");
+                if let Some(ref hashes_path) = release_hashes {
+                    let known = parse_release_hashes(hashes_path)?;
+                    print_env_match(
+                        "script_hash",
+                        &c.environment.script_hash,
+                        find_hash(&known, "capture.sh"),
+                    );
+                    print_env_match(
+                        "binary_hash",
+                        &c.environment.binary_hash,
+                        find_hash(&known, "device"),
+                    );
+                } else {
+                    println!("  script_hash:  {}", c.environment.script_hash);
+                    println!("  binary_hash:  {}", c.environment.binary_hash);
+                }
+                println!("  hw_serial:    {}", c.environment.hw_serial);
+                println!("  camera_info:  {}", c.environment.camera_info);
+            }
         }
     }
     Ok(())
+}
+
+/// Parse a SHA256SUMS file into (hash, filename) pairs.
+fn parse_release_hashes(path: &str) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let contents = std::fs::read_to_string(path)
+        .map_err(|e| format!("could not read release hashes file {path}: {e}"))?;
+    let mut entries = Vec::new();
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // Format: "sha256:hex  filename" or "sha256:hex filename"
+        if let Some((hash, name)) = line.split_once(|c: char| c.is_whitespace()) {
+            entries.push((hash.trim().to_string(), name.trim().to_string()));
+        }
+    }
+    Ok(entries)
+}
+
+/// Find a hash in release entries by partial filename match.
+fn find_hash<'a>(entries: &'a [(String, String)], needle: &str) -> Option<&'a str> {
+    entries
+        .iter()
+        .find(|(_, name)| name.contains(needle))
+        .map(|(hash, _)| hash.as_str())
+}
+
+/// Print a MATCH/MISMATCH line for an environment field.
+fn print_env_match(field: &str, actual: &str, expected: Option<&str>) {
+    match expected {
+        Some(exp) if exp == actual => {
+            println!("  {field}:  {actual} → MATCH");
+        }
+        Some(exp) => {
+            println!("  {field}:  {actual} → MISMATCH (expected {exp})");
+        }
+        None => {
+            println!("  {field}:  {actual} (no reference hash)");
+        }
+    }
 }
 
 #[cfg(test)]
