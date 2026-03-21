@@ -67,7 +67,7 @@ impl Signable for Capture {
         hasher.update(address_bytes); // 20
         hasher.update(content_bytes); // 32
         hasher.update(ts.to_be_bytes()); // 8
-                                          // environment attestation fields
+                                         // environment attestation fields
         hasher.update(self.environment.script_hash.as_bytes());
         hasher.update(self.environment.binary_hash.as_bytes());
         hasher.update(self.environment.hw_serial.as_bytes());
