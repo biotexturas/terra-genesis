@@ -215,12 +215,14 @@ function AppContent() {
       provider.getNetwork(),
       provider.getBalance(signerAddress),
     ]);
+    console.log(`Wallet on chain ${network.chainId} with balance ${formatEther(balance)} ETH`);
     const authorized = hasContractAddress
       ? await new Contract(appConfig.contractAddress, registryAbi, provider).isAttester(
           signerAddress,
         )
       : false;
 
+    console.log(`Wallet ${signerAddress} is authorized attester: ${authorized}`);
     setWalletAddress(signerAddress);
     setWalletChainId(Number(network.chainId));
     setWalletBalance(Number(formatEther(balance)).toFixed(4));
@@ -228,6 +230,7 @@ function AppContent() {
   }
 
   async function connectWallet() {
+    console.log("Connecting wallet...");
     if (!window.ethereum) {
       setSubmitError("No wallet found. Install MetaMask or another injected wallet.");
       return;
@@ -241,7 +244,10 @@ function AppContent() {
       await provider.send("eth_requestAccounts", []);
       const signer = await provider.getSigner();
       const signerAddress = await signer.getAddress();
+      console.log(`Wallet connected: ${signerAddress}`);
       await updateWalletState(provider, signerAddress);
+      console.log(`Connected wallet ${signerAddress} on chain ${walletChainId}`);
+      console.log("Wallet is authorized attester:", isAuthorizedAttester);
     } catch (error) {
       setSubmitError(extractError(error));
     } finally {
