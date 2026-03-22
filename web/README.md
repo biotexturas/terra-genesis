@@ -20,11 +20,11 @@ React frontend for the `HardTrustRegistry` contract in `../contracts`.
   2. In another terminal, deploy the contract from contracts/script/Deploy.s.sol:
 
   cd ./terra-genesis/contracts
+  PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
   ATTESTER_ADDRESS=0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
-  forge script script/Deploy.s.sol \
+  forge script script/Deploy.s.sol:DeployScript \
     --broadcast \
-    --rpc-url http://127.0.0.1:8545 \
-    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+    --rpc-url http://127.0.0.1:8545
 
   3. Create web/.env.
 

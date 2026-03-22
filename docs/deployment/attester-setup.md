@@ -76,16 +76,16 @@ anvil
 **Step 2 — Deploy the HardTrustRegistry contract** from the `hardtrust` repo root:
 ```bash
 cd contracts
-ATTESTER_ADDRESS=0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
-  forge script script/Deploy.s.sol \
+PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  ATTESTER_ADDRESS=0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
+  forge script script/Deploy.s.sol:DeployScript \
   --broadcast \
-  --rpc-url http://127.0.0.1:8545 \
-  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+  --rpc-url http://127.0.0.1:8545
 ```
 
 The output includes the deployed contract address:
 ```
-DEPLOYED: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+HardTrustRegistry deployed at: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 ```
 
 Record this address — it is required as `--contract` in all subsequent commands.
@@ -163,9 +163,9 @@ export HARDTRUST_PRIVATE_KEY="0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a84
 
 # Deploy (once per Anvil session)
 cd contracts
-ATTESTER_ADDRESS=0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
-  forge script script/Deploy.s.sol --broadcast --rpc-url http://127.0.0.1:8545 \
-  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+  ATTESTER_ADDRESS=0x70997970C51812dc3A010C7d01b50e0d17dc79C8 \
+  forge script script/Deploy.s.sol:DeployScript --broadcast --rpc-url http://127.0.0.1:8545
 # Record CONTRACT_ADDRESS from output
 
 # Register the device (once per device serial)

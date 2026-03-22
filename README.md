@@ -104,6 +104,16 @@ Configure via `.env` (see `web/.env.example`):
 
 Requires MetaMask or any injected EVM wallet.
 
+### Run on Avalanche Fuji
+
+```bash
+cd web
+npm install
+npm run dev -- --mode fuji
+```
+
+This loads `web/.env.fuji` instead of `web/.env`. The network indicator in the header confirms the connected chain.
+
 ---
 
 ## Hackathon Scope
@@ -116,6 +126,7 @@ During this hackathon we prototyped:
 - [x] Environment attestation (script hash, binary hash, hardware serial)
 - [x] Web-based registry portal and capture verification UI
 - [x] End-to-end test suite (6 cases: readings, captures, environment match/mismatch)
+- [x] Live testnet deployment on Avalanche Fuji C-Chain (verified contract)
 
 The prototype demonstrates how **open hardware scientific instruments** can produce verifiable on-chain data — the foundation for a DePIN of scientific instruments accessible to citizens and AI agents alike.
 
@@ -329,6 +340,34 @@ See [CLAUDE.md](CLAUDE.md) for the full development workflow.
 
 For local development with Anvil, the e2e script sets these automatically.
 
+### Web Environment Files
+
+The web app uses Vite env modes. Each `.env.[mode]` file configures a different network:
+
+`web/.env` — Local development (Anvil):
+```
+VITE_RPC_URL=http://127.0.0.1:8545
+VITE_CHAIN_ID=31337
+VITE_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+```
+
+`web/.env.fuji` — Avalanche Fuji testnet:
+```
+VITE_RPC_URL=https://api.avax-test.network/ext/bc/C/rpc
+VITE_CHAIN_ID=43113
+VITE_CONTRACT_ADDRESS=0xF7497fC600Bd4877A0Ad3C0B3BBBEE80b9038477
+VITE_DEPLOY_BLOCK=53056175
+```
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_RPC_URL` | JSON-RPC endpoint |
+| `VITE_CHAIN_ID` | Expected chain ID |
+| `VITE_CONTRACT_ADDRESS` | Deployed HardTrustRegistry address |
+| `VITE_DEPLOY_BLOCK` | Block number at deployment (optional, for event scanning) |
+
+To add a new network, create `web/.env.[mode]` and run `npm run dev -- --mode [mode]`.
+
 ---
 
 ## Release & Installation
@@ -361,6 +400,42 @@ cargo release patch              # 0.1.0 → 0.1.1
 ```
 
 Requires `cargo-release` (`cargo install cargo-release`). See [release.toml](release.toml).
+
+---
+
+## Deploy to Avalanche Fuji
+
+```bash
+# 1. Get testnet AVAX from https://core.app/tools/testnet-faucet
+# 2. Configure
+cp contracts/.env.fuji.example contracts/.env.fuji
+# Edit .env.fuji with your private key and attester address
+
+# 3. Deploy
+source contracts/.env.fuji
+forge script contracts/script/Deploy.s.sol:DeployScript \
+  --rpc-url fuji \
+  --broadcast
+
+# 4. Note the deployed contract address from the output
+```
+
+Fuji C-Chain: Chain ID 43113 | Explorer: https://testnet.snowtrace.io
+
+### Live Testnet Deployment
+
+TerraGenesis is deployed and verified on Avalanche Fuji C-Chain:
+
+| Resource | Address / Link |
+|----------|---------------|
+| **Contract (verified)** | [`0xF7497fC600Bd4877A0Ad3C0B3BBBEE80b9038477`](https://testnet.snowtrace.io/address/0xF7497fC600Bd4877A0Ad3C0B3BBBEE80b9038477) |
+| **Attester** | `0xba9C2f6Edf0C9968F0b3af39a7B52A8Ea03c06e5` |
+| **Registered Device** | `0xAf2f889073Fa571Fd13526A7adB105560B0B40f5` |
+| **Serial Hash** | `0x3f28f69611564c08d9301303ddbd21a7a086ccefc0ff7e8640f83da1c4a34b6f` |
+| **Network** | Avalanche Fuji C-Chain (Chain ID: 43113) |
+| **Explorer** | [testnet.snowtrace.io](https://testnet.snowtrace.io) |
+
+The contract source code is fully verified on Snowtrace — anyone can read the Solidity code and interact with it directly from the explorer.
 
 ---
 

@@ -114,4 +114,5 @@ export const appConfig = {
   rpcUrl: import.meta.env.VITE_RPC_URL?.trim() || "http://127.0.0.1:8545",
   contractAddress: import.meta.env.VITE_CONTRACT_ADDRESS?.trim() || "",
   expectedChainId: Number.parseInt(import.meta.env.VITE_CHAIN_ID || "31337", 10),
+  deployBlock: Number.parseInt(import.meta.env.VITE_DEPLOY_BLOCK || "0", 10),
 };
