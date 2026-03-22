@@ -1,0 +1,5 @@
+{
+  "buildCommand": "vite build --mode fuji",
+  "outputDirectory": "dist",
+  "framework": "vite"
+}
