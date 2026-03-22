@@ -10,6 +10,7 @@ import {
   toUtf8Bytes,
 } from "ethers";
 import { appConfig, registryAbi } from "./contract";
+import NetworkStatus from "./NetworkStatus";
 
 const emptyForm = {
   serial: "",
@@ -590,9 +591,12 @@ function AppContent() {
             <p className="tagline">Provenance for every observation</p>
           </div>
         </div>
-        <button className="ghost-button" onClick={connectWallet} disabled={connectingWallet}>
-          {connectingWallet ? "Connecting..." : walletAddress ? shortAddress(walletAddress) : "Connect wallet"}
-        </button>
+        <div className="topbar-actions">
+          <NetworkStatus />
+          <button className="ghost-button" onClick={connectWallet} disabled={connectingWallet}>
+            {connectingWallet ? "Connecting..." : walletAddress ? shortAddress(walletAddress) : "Connect wallet"}
+          </button>
+        </div>
       </header>
 
       <main className="layout">
