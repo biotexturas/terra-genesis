@@ -5,6 +5,7 @@
 [![Status](https://img.shields.io/badge/status-hackathon%20prototype-orange)](https://github.com/biotexturas/terra-genesis)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![DeSci](https://img.shields.io/badge/domain-DeSci-green)](docs/proposal.md)
+[![Web App](https://img.shields.io/badge/web-live%20on%20Vercel-black)](https://terra-genesis-wine.vercel.app/)
 
 ---
 
@@ -82,6 +83,8 @@ See [docs/architecture.md](docs/architecture.md) for the full technical architec
 ---
 
 ## Web Interface
+
+**Live demo:** [terra-genesis-wine.vercel.app](https://terra-genesis-wine.vercel.app/) — connected to Avalanche Fuji testnet
 
 TerraGenesis includes a browser-based portal for inspecting the device registry and verifying captures:
 
@@ -434,6 +437,7 @@ TerraGenesis is deployed and verified on Avalanche Fuji C-Chain:
 | **Serial Hash** | `0x3f28f69611564c08d9301303ddbd21a7a086ccefc0ff7e8640f83da1c4a34b6f` |
 | **Network** | Avalanche Fuji C-Chain (Chain ID: 43113) |
 | **Explorer** | [testnet.snowtrace.io](https://testnet.snowtrace.io) |
+| **Web App** | [terra-genesis-wine.vercel.app](https://terra-genesis-wine.vercel.app/) |
 
 The contract source code is fully verified on Snowtrace — anyone can read the Solidity code and interact with it directly from the explorer.
 

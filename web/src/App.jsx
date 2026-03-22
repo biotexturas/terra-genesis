@@ -320,11 +320,20 @@ function AppContent() {
       const provider = new JsonRpcProvider(appConfig.rpcUrl);
       const contract = new Contract(appConfig.contractAddress, registryAbi, provider);
       const fromBlock = appConfig.deployBlock || 0;
-      const [network, contractAttester, logs] = await Promise.all([
+      const [network, contractAttester, latestBlock] = await Promise.all([
         provider.getNetwork(),
         contract.ATTESTER(),
-        contract.queryFilter(contract.filters.DeviceRegistered(), fromBlock, "latest"),
+        provider.getBlockNumber(),
       ]);
+
+      // Paginate event queries — some RPCs limit to 2048 blocks per request
+      const MAX_RANGE = 2000;
+      const logs = [];
+      for (let start = fromBlock; start <= latestBlock; start += MAX_RANGE + 1) {
+        const end = Math.min(start + MAX_RANGE, latestBlock);
+        const chunk = await contract.queryFilter(contract.filters.DeviceRegistered(), start, end);
+        logs.push(...chunk);
+      }
 
       const uniqueSerialHashes = [...new Set(logs.map((log) => log.args.serialHash))];
       const deviceDetails = await Promise.all(
