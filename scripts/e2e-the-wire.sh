@@ -15,10 +15,11 @@ export HARDTRUST_PRIVATE_KEY="0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a84
 cd contracts && forge build && cd ..
 cargo build --workspace
 
-# Deploy contract (ATTESTER_ADDRESS passed from justfile)
-DEPLOY_OUTPUT=$(cd contracts && ATTESTER_ADDRESS="${ATTESTER_ADDRESS}" forge script script/Deploy.s.sol \
+# Deploy contract (Anvil account #0 as deployer, ATTESTER_ADDRESS passed from justfile)
+export PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+DEPLOY_OUTPUT=$(cd contracts && forge script script/Deploy.s.sol:DeployScript \
   --rpc-url http://127.0.0.1:8545 --broadcast 2>&1)
-CONTRACT_ADDRESS=$(echo "$DEPLOY_OUTPUT" | awk '/DEPLOYED:/ {for(i=1;i<=NF;i++) if($i ~ /^0x/) print $i}')
+CONTRACT_ADDRESS=$(echo "$DEPLOY_OUTPUT" | awk '/deployed at:/ {for(i=1;i<=NF;i++) if($i ~ /^0x/) print $i}')
 echo "Contract: $CONTRACT_ADDRESS"
 
 # Device init — remove any existing key so init always prints fresh Serial and Address

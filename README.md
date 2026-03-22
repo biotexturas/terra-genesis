@@ -364,6 +364,27 @@ Requires `cargo-release` (`cargo install cargo-release`). See [release.toml](rel
 
 ---
 
+## Deploy to Avalanche Fuji
+
+```bash
+# 1. Get testnet AVAX from https://core.app/tools/testnet-faucet
+# 2. Configure
+cp contracts/.env.fuji.example contracts/.env.fuji
+# Edit .env.fuji with your private key and attester address
+
+# 3. Deploy
+source contracts/.env.fuji
+forge script contracts/script/Deploy.s.sol:DeployScript \
+  --rpc-url fuji \
+  --broadcast
+
+# 4. Note the deployed contract address from the output
+```
+
+Fuji C-Chain: Chain ID 43113 | Explorer: https://testnet.snowtrace.io
+
+---
+
 ## CI
 
 GitHub Actions runs on every push and PR to `main`:

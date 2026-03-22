@@ -21,3 +21,6 @@ reading.json
 capture.json
 capture-output/
 .mcp.json
+
+# Deployment secrets
+contracts/.env.fuji

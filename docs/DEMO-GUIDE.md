@@ -36,7 +36,7 @@ source .env.demo && anvil
 ## Step 3 — Local: Deploy Contract
 
 ```bash
-cd contracts && ATTESTER_ADDRESS=$ATTESTER_ADDRESS forge script script/Deploy.s.sol:Deploy --rpc-url $RPC_URL --private-key $ANVIL_KEY --broadcast && cd ..
+cd contracts && PRIVATE_KEY=$ANVIL_KEY ATTESTER_ADDRESS=$ATTESTER_ADDRESS forge script script/Deploy.s.sol:DeployScript --rpc-url $RPC_URL --broadcast && cd ..
 ```
 
 > Copy `CONTRACT_ADDR` into `.env.demo` → `source .env.demo`
