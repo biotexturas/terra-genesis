@@ -104,6 +104,16 @@ Configure via `.env` (see `web/.env.example`):
 
 Requires MetaMask or any injected EVM wallet.
 
+### Run on Avalanche Fuji
+
+```bash
+cd web
+npm install
+npm run dev -- --mode fuji
+```
+
+This loads `web/.env.fuji` instead of `web/.env`. The network indicator in the header confirms the connected chain.
+
 ---
 
 ## Hackathon Scope
@@ -329,6 +339,34 @@ See [CLAUDE.md](CLAUDE.md) for the full development workflow.
 | `TERRASCOPE_QUALITY` | No | `90` | JPEG quality (1-100) |
 
 For local development with Anvil, the e2e script sets these automatically.
+
+### Web Environment Files
+
+The web app uses Vite env modes. Each `.env.[mode]` file configures a different network:
+
+`web/.env` — Local development (Anvil):
+```
+VITE_RPC_URL=http://127.0.0.1:8545
+VITE_CHAIN_ID=31337
+VITE_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+```
+
+`web/.env.fuji` — Avalanche Fuji testnet:
+```
+VITE_RPC_URL=https://api.avax-test.network/ext/bc/C/rpc
+VITE_CHAIN_ID=43113
+VITE_CONTRACT_ADDRESS=0xF7497fC600Bd4877A0Ad3C0B3BBBEE80b9038477
+VITE_DEPLOY_BLOCK=53056175
+```
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_RPC_URL` | JSON-RPC endpoint |
+| `VITE_CHAIN_ID` | Expected chain ID |
+| `VITE_CONTRACT_ADDRESS` | Deployed HardTrustRegistry address |
+| `VITE_DEPLOY_BLOCK` | Block number at deployment (optional, for event scanning) |
+
+To add a new network, create `web/.env.[mode]` and run `npm run dev -- --mode [mode]`.
 
 ---
 
