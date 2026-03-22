@@ -81,7 +81,131 @@ See [docs/architecture.md](docs/architecture.md) for the full technical architec
 
 ---
 
-## The Wire — Walking Skeleton
+## Web Interface
+
+TerraGenesis includes a browser-based portal for inspecting the device registry and verifying captures:
+
+- **Registry Browser** — view all registered devices with serial hash, address, and attestation status
+- **Device Registration** — register new TerraScope devices on-chain (attester wallet required)
+- **Capture Verification** — upload a capture manifest to verify provenance and environment on-chain
+
+### Run locally
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Configure via `.env` (see `web/.env.example`):
+- `VITE_CONTRACT_ADDRESS` — deployed HardTrustRegistry address
+- `VITE_RPC_URL` — JSON-RPC endpoint (default: `http://127.0.0.1:8545`)
+- `VITE_EXPECTED_CHAIN_ID` — expected chain ID (default: `31337`)
+
+Requires MetaMask or any injected EVM wallet.
+
+---
+
+## Hackathon Scope
+
+During this hackathon we prototyped:
+
+- [x] Device identity and signing (secp256k1/ECDSA, on-chain registry)
+- [x] Microscopy data capture pipeline (hash, sign, manifest)
+- [x] On-chain verification — trustless, free, permissionless (`verifyCapture()`)
+- [x] Environment attestation (script hash, binary hash, hardware serial)
+- [x] Web-based registry portal and capture verification UI
+- [x] End-to-end test suite (6 cases: readings, captures, environment match/mismatch)
+
+The prototype demonstrates how **open hardware scientific instruments** can produce verifiable on-chain data — the foundation for a DePIN of scientific instruments accessible to citizens and AI agents alike.
+
+---
+
+## Vision
+
+We envision a decentralized world where people and AI agents play games accessing a DePIN of scientific instruments to interact with Nature — biology in particular.
+
+With cheap, hackable, open-source hardware available to everyone, **playful interactions with Nature become the substrate for serious scientific discovery.** How does biological intelligence implement ecosystem function? Can statistics emerge across many independent devices? Can AI agents learn to operate instruments from humans, learn intelligence from smart bacteria, and together unravel the secrets of sustainability?
+
+TerraGenesis makes the invisible **visible and verifiable**, and turns any agent or citizen into a scientist, a maker, or a player.
+
+> *Is intelligence, in the end, about sustainability and persistence in a challenging environment? Can bacteria teach us — and teach our agents?*
+
+---
+
+## What's Next
+
+TerraGenesis is a hackathon prototype. Here's where it goes from here:
+
+### Network & Data
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **On-chain proof persistence** | Store capture proofs permanently on-chain, not just verify | Designed |
+| **Multi-device DePIN** | Connect multiple TerraScopes into a decentralized instrument network | Next milestone |
+| **AI agent access** | API endpoints so research agents can trigger captures and verify data remotely | Planned |
+| **Decentralized storage** | IPFS / Arweave for raw microscopy images with on-chain anchoring | Planned |
+| **GameFi layer** | Turn scientific observation into playable experiences — biotic games with real microbes | Vision |
+
+### Device Security Roadmap
+
+TerraGenesis currently provides **Layer 1** security: software-level environment attestation (script hash, binary hash, hardware serial). The roadmap extends this toward hardware-rooted trust:
+
+| Layer | Name | What it adds | Status |
+|-------|------|-------------|--------|
+| **Layer 1** | Software Attestation | Hash verification of capture script + device binary, on-chain environment match | **Implemented** |
+| **Layer 2** | Secure Boot + Firmware Signing | Signed firmware, secure boot chain, private key in secure element (TPM / dedicated chip). Images can only be signed by authorized software | Planned |
+| **Layer 3** | Trusted Execution Environment | Capture occurs inside a TEE — the image never exists unsigned. Hash + sign is atomic | Research |
+
+> No system can prove 100% that the physical world wasn't manipulated. What TerraGenesis proves is that **the data came from an authorized device and was not altered digitally after capture**. And that is already enormous.
+
+### Capture Identity & Physical Fingerprinting
+
+Beyond verifying *which device* captured data, future versions can verify *how* and *whether it's physically consistent*:
+
+| Technique | Description |
+|-----------|-------------|
+| **Sensor Fusion** | Co-sign temperature, humidity, vibration, GPS, and external timestamps alongside the image. The more sensors, the harder to falsify |
+| **Physical Noise Fingerprint** | Each CMOS sensor has unique optical noise patterns and imperfections (e.g., a scratched lens). These can be modeled as a device "biometric" — a hardware fingerprint that's nearly impossible to forge |
+| **Proof-of-Capture Sequence** | Instead of signing individual images, sign a chain: `hash(img₁) → hash(img₂) → hash(img₃)`. Tampering with one breaks the entire sequence, creating **biological time continuity** |
+
+### Intelligent Validation with GenLayer
+
+Traditional EVM contracts can verify signatures but can't *reason* about data. [GenLayer](https://www.genlayer.com/) enables AI-powered smart contracts that can:
+
+| Capability | Example |
+|------------|---------|
+| **Device legitimacy scoring** | Evaluate metadata consistency, compare against known device profiles, flag anomalies (`camera_resolution < threshold → reject`) |
+| **Firmware validation** | Check firmware hash against known versions, flag unknown builds, require human review for unrecognized configurations |
+| **Capture plausibility** | Validate timestamp consistency, detect suspicious image patterns, compare against previous captures from the same device |
+| **Physical fingerprint matching** | Verify that optical noise patterns match the registered sensor profile — detect if the CMOS sensor was swapped or the lens replaced |
+
+This opens the door to **AI-assisted scientific data validation**: not just "was this signed correctly?" but "does this data *look* like it came from a real microscope?"
+
+See [docs/proposal.md](docs/proposal.md) for the full hackathon proposal.
+
+---
+
+## Integration with Landscapes of Opportunity
+
+Within the **Landscapes of Opportunity** ecosystem, TerraGenesis acts as the **data trust layer** for the TerraScope DePIN network.
+
+It enables:
+
+- Verifiable biological datasets
+- Reproducible community science
+- Trusted data for AI and computational analysis
+- Future digital assets derived from microbial ecosystems
+
+This infrastructure connects real ecological observations with digital worlds and scientific experimentation.
+
+---
+
+## Developer Guide
+
+---
+
+## End-to-End Verification
 
 "The Wire" is the end-to-end walking skeleton proving the core value proposition:
 
@@ -157,43 +281,6 @@ attester set-release-hashes \
 
 ---
 
-## Web Interface
-
-TerraGenesis includes a browser-based portal for inspecting the device registry and verifying captures:
-
-- **Registry Browser** — view all registered devices with serial hash, address, and attestation status
-- **Device Registration** — register new TerraScope devices on-chain (attester wallet required)
-- **Capture Verification** — upload a capture manifest to verify provenance and environment on-chain
-
-### Run locally
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-Configure via `.env` (see `web/.env.example`):
-- `VITE_CONTRACT_ADDRESS` — deployed HardTrustRegistry address
-- `VITE_RPC_URL` — JSON-RPC endpoint (default: `http://127.0.0.1:8545`)
-- `VITE_EXPECTED_CHAIN_ID` — expected chain ID (default: `31337`)
-
-Requires MetaMask or any injected EVM wallet.
-
----
-
-## CI
-
-GitHub Actions runs on every push and PR to `main`:
-
-| Job | What it checks |
-|-----|----------------|
-| **lint** | `cargo fmt`, `cargo clippy`, `forge fmt`, `solhint` |
-| **test** | `cargo test`, `forge test` |
-| **e2e** | `just e2e-the-wire` — full end-to-end (readings + captures) |
-
----
-
 ## Quick Start
 
 ### Prerequisites
@@ -231,6 +318,19 @@ See [CLAUDE.md](CLAUDE.md) for the full development workflow.
 
 ---
 
+## Configuration
+
+| Env Var | Required | Default | Description |
+|---------|----------|---------|-------------|
+| `HARDTRUST_PRIVATE_KEY` | Yes (for `register`) | — | Attester signing key (hex, e.g. `0x...`) |
+| `HARDTRUST_RPC_URL` | No | `http://127.0.0.1:8545` | Ethereum JSON-RPC endpoint |
+| `TERRASCOPE_RESOLUTION` | No | `1920x1080` | Capture resolution |
+| `TERRASCOPE_QUALITY` | No | `90` | JPEG quality (1-100) |
+
+For local development with Anvil, the e2e script sets these automatically.
+
+---
+
 ## Release & Installation
 
 TerraGenesis ships pre-compiled binaries for Raspberry Pi (ARMv7 musl) and Ubuntu/macOS (x86_64 / arm64).
@@ -264,111 +364,15 @@ Requires `cargo-release` (`cargo install cargo-release`). See [release.toml](rel
 
 ---
 
-## Configuration
+## CI
 
-| Env Var | Required | Default | Description |
-|---------|----------|---------|-------------|
-| `HARDTRUST_PRIVATE_KEY` | Yes (for `register`) | — | Attester signing key (hex, e.g. `0x...`) |
-| `HARDTRUST_RPC_URL` | No | `http://127.0.0.1:8545` | Ethereum JSON-RPC endpoint |
-| `TERRASCOPE_RESOLUTION` | No | `1920x1080` | Capture resolution |
-| `TERRASCOPE_QUALITY` | No | `90` | JPEG quality (1-100) |
+GitHub Actions runs on every push and PR to `main`:
 
-For local development with Anvil, the e2e script sets these automatically.
-
----
-
-## Integration with Landscapes of Opportunity
-
-Within the **Landscapes of Opportunity** ecosystem, TerraGenesis acts as the **data trust layer** for the TerraScope DePIN network.
-
-It enables:
-
-- Verifiable biological datasets
-- Reproducible community science
-- Trusted data for AI and computational analysis
-- Future digital assets derived from microbial ecosystems
-
-This infrastructure connects real ecological observations with digital worlds and scientific experimentation.
-
----
-
-## Vision
-
-We envision a decentralized world where people and AI agents play games accessing a DePIN of scientific instruments to interact with Nature — biology in particular.
-
-With cheap, hackable, open-source hardware available to everyone, **playful interactions with Nature become the substrate for serious scientific discovery.** How does biological intelligence implement ecosystem function? Can statistics emerge across many independent devices? Can AI agents learn to operate instruments from humans, learn intelligence from smart bacteria, and together unravel the secrets of sustainability?
-
-TerraGenesis makes the invisible **visible and verifiable**, and turns any agent or citizen into a scientist, a maker, or a player.
-
-> *Is intelligence, in the end, about sustainability and persistence in a challenging environment? Can bacteria teach us — and teach our agents?*
-
----
-
-## Hackathon Scope
-
-During this hackathon we prototyped:
-
-- [x] Device identity and signing (secp256k1/ECDSA, on-chain registry)
-- [x] Microscopy data capture pipeline (hash, sign, manifest)
-- [x] On-chain verification — trustless, free, permissionless (`verifyCapture()`)
-- [x] Environment attestation (script hash, binary hash, hardware serial)
-- [x] Web-based registry portal and capture verification UI
-- [x] End-to-end test suite (6 cases: readings, captures, environment match/mismatch)
-
-The prototype demonstrates how **open hardware scientific instruments** can produce verifiable on-chain data — the foundation for a DePIN of scientific instruments accessible to citizens and AI agents alike.
-
----
-
-## What's Next
-
-TerraGenesis is a hackathon prototype. Here's where it goes from here:
-
-### Network & Data
-
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **On-chain proof persistence** | Store capture proofs permanently on-chain, not just verify | Designed |
-| **Multi-device DePIN** | Connect multiple TerraScopes into a decentralized instrument network | Next milestone |
-| **AI agent access** | API endpoints so research agents can trigger captures and verify data remotely | Planned |
-| **Decentralized storage** | IPFS / Arweave for raw microscopy images with on-chain anchoring | Planned |
-| **GameFi layer** | Turn scientific observation into playable experiences — biotic games with real microbes | Vision |
-
-### Device Security Roadmap
-
-TerraGenesis currently provides **Layer 1** security: software-level environment attestation (script hash, binary hash, hardware serial). The roadmap extends this toward hardware-rooted trust:
-
-| Layer | Name | What it adds | Status |
-|-------|------|-------------|--------|
-| **Layer 1** | Software Attestation | Hash verification of capture script + device binary, on-chain environment match | **Implemented** |
-| **Layer 2** | Secure Boot + Firmware Signing | Signed firmware, secure boot chain, private key in secure element (TPM / dedicated chip). Images can only be signed by authorized software | Planned |
-| **Layer 3** | Trusted Execution Environment | Capture occurs inside a TEE — the image never exists unsigned. Hash + sign is atomic | Research |
-
-> No system can prove 100% that the physical world wasn't manipulated. What TerraGenesis proves is that **the data came from an authorized device and was not altered digitally after capture**. And that is already enormous.
-
-### Capture Identity & Physical Fingerprinting
-
-Beyond verifying *which device* captured data, future versions can verify *how* and *whether it's physically consistent*:
-
-| Technique | Description |
-|-----------|-------------|
-| **Sensor Fusion** | Co-sign temperature, humidity, vibration, GPS, and external timestamps alongside the image. The more sensors, the harder to falsify |
-| **Physical Noise Fingerprint** | Each CMOS sensor has unique optical noise patterns and imperfections (e.g., a scratched lens). These can be modeled as a device "biometric" — a hardware fingerprint that's nearly impossible to forge |
-| **Proof-of-Capture Sequence** | Instead of signing individual images, sign a chain: `hash(img₁) → hash(img₂) → hash(img₃)`. Tampering with one breaks the entire sequence, creating **biological time continuity** |
-
-### Intelligent Validation with GenLayer
-
-Traditional EVM contracts can verify signatures but can't *reason* about data. [GenLayer](https://www.genlayer.com/) enables AI-powered smart contracts that can:
-
-| Capability | Example |
-|------------|---------|
-| **Device legitimacy scoring** | Evaluate metadata consistency, compare against known device profiles, flag anomalies (`camera_resolution < threshold → reject`) |
-| **Firmware validation** | Check firmware hash against known versions, flag unknown builds, require human review for unrecognized configurations |
-| **Capture plausibility** | Validate timestamp consistency, detect suspicious image patterns, compare against previous captures from the same device |
-| **Physical fingerprint matching** | Verify that optical noise patterns match the registered sensor profile — detect if the CMOS sensor was swapped or the lens replaced |
-
-This opens the door to **AI-assisted scientific data validation**: not just "was this signed correctly?" but "does this data *look* like it came from a real microscope?"
-
-See [docs/proposal.md](docs/proposal.md) for the full hackathon proposal.
+| Job | What it checks |
+|-----|----------------|
+| **lint** | `cargo fmt`, `cargo clippy`, `forge fmt`, `solhint` |
+| **test** | `cargo test`, `forge test` |
+| **e2e** | `just e2e-the-wire` — full end-to-end (readings + captures) |
 
 ---
 
