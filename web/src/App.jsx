@@ -318,10 +318,11 @@ function AppContent() {
     try {
       const provider = new JsonRpcProvider(appConfig.rpcUrl);
       const contract = new Contract(appConfig.contractAddress, registryAbi, provider);
+      const fromBlock = appConfig.deployBlock || 0;
       const [network, contractAttester, logs] = await Promise.all([
         provider.getNetwork(),
         contract.ATTESTER(),
-        contract.queryFilter(contract.filters.DeviceRegistered(), 0, "latest"),
+        contract.queryFilter(contract.filters.DeviceRegistered(), fromBlock, "latest"),
       ]);
 
       const uniqueSerialHashes = [...new Set(logs.map((log) => log.args.serialHash))];
