@@ -116,6 +116,7 @@ During this hackathon we prototyped:
 - [x] Environment attestation (script hash, binary hash, hardware serial)
 - [x] Web-based registry portal and capture verification UI
 - [x] End-to-end test suite (6 cases: readings, captures, environment match/mismatch)
+- [x] Live testnet deployment on Avalanche Fuji C-Chain (verified contract)
 
 The prototype demonstrates how **open hardware scientific instruments** can produce verifiable on-chain data — the foundation for a DePIN of scientific instruments accessible to citizens and AI agents alike.
 
@@ -382,6 +383,21 @@ forge script contracts/script/Deploy.s.sol:DeployScript \
 ```
 
 Fuji C-Chain: Chain ID 43113 | Explorer: https://testnet.snowtrace.io
+
+### Live Testnet Deployment
+
+TerraGenesis is deployed and verified on Avalanche Fuji C-Chain:
+
+| Resource | Address / Link |
+|----------|---------------|
+| **Contract (verified)** | [`0xF7497fC600Bd4877A0Ad3C0B3BBBEE80b9038477`](https://testnet.snowtrace.io/address/0xF7497fC600Bd4877A0Ad3C0B3BBBEE80b9038477) |
+| **Attester** | `0xba9C2f6Edf0C9968F0b3af39a7B52A8Ea03c06e5` |
+| **Registered Device** | `0xAf2f889073Fa571Fd13526A7adB105560B0B40f5` |
+| **Serial Hash** | `0x3f28f69611564c08d9301303ddbd21a7a086ccefc0ff7e8640f83da1c4a34b6f` |
+| **Network** | Avalanche Fuji C-Chain (Chain ID: 43113) |
+| **Explorer** | [testnet.snowtrace.io](https://testnet.snowtrace.io) |
+
+The contract source code is fully verified on Snowtrace — anyone can read the Solidity code and interact with it directly from the explorer.
 
 ---
 
